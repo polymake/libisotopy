@@ -2,8 +2,20 @@
 
 #include <vector>
 #include <set>
+#include <map>
+//#include <algorithm>
+//#include <cstddef>
 
-struct IsotopyGraph {
-    std::vector<std::set<int>> adjacency;
-    // Add other members as needed
+namespace Isotopy {
+
+struct Graph {
+    int delta;
+    std::map<int, std::set<int>> adjacency;
+
+    
+    Graph() = default;
+    Graph(int delta, const std::vector<bool>& sign, const std::set<std::pair<int, int>>& edges);
+    
 };
+
+}
