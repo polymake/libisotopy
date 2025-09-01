@@ -1,0 +1,10 @@
+# Build artifacts
+*.o
+*.so
+*.exe
+isotopy_graph
+
+# Editor/OS files
+*.swp
+*~
+.DS_Store
