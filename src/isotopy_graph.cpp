@@ -18,6 +18,7 @@ Graph::Graph(int delta, const std::vector<bool>&sign_vector, const std::set<std:
 
   sign.resize(nvert_formula);
   side_points.resize(4 * delta);
+  sides.resize(4 * delta, std::vector<bool>(4, false)); 
 
   int side_point_count = 0;
   int global_count = 0;
@@ -27,7 +28,17 @@ Graph::Graph(int delta, const std::vector<bool>&sign_vector, const std::set<std:
     for (int i = 0; i <= limit; ++i) {
       if (i == limit) {
         side_points[side_point_count] = count;
+        if (limit == 0) {
+          sides[side_point_count][0] = true;
+          sides[side_point_count][1] = true;
+        } else if (limit == delta) {
+          sides[side_point_count][0] = true;
+          sides[side_point_count][3] = true;
+        } else {
+          sides[side_point_count][0] = true;
+        }
         side_point_count++;
+
       }
 
       vertex_map[count] = count;
@@ -41,12 +52,16 @@ Graph::Graph(int delta, const std::vector<bool>&sign_vector, const std::set<std:
   for (int limit = delta; limit >= 0; --limit) {
     for (int i = 0; i <= limit; ++i) {
       if (i == 0) {
-        std::cout << "Mapping " << count+nverts << " to " << count << "\n";
         vertex_map[count+nverts] = count;
       } else {
         if (i == limit) {
-          side_points[side_point_count + limit] = global_count;
-          side_point_count++;
+          side_points[side_point_count +  limit -1 ] = global_count;
+          if (limit == delta) {
+            sides[side_point_count + limit -1][1] = true;
+            sides[side_point_count + limit -1][2] = true;
+          } else {
+            sides[side_point_count + limit -1][1] = true;
+          }
         }
         vertex_map[count+nverts] = global_count;
         if (i % 2 == 0) {
@@ -59,10 +74,7 @@ Graph::Graph(int delta, const std::vector<bool>&sign_vector, const std::set<std:
       count++;
     }
   }
-  std::cout << "After Second Quadrant:\n";
-  for (const auto& [key, value] : vertex_map) {
-    std::cout << "Original: " << key << " -> New: " << value << "\n";
-  }
+  side_point_count += delta;
   
   //Third and Fourth Quadrants
   count = 0;
@@ -80,8 +92,10 @@ Graph::Graph(int delta, const std::vector<bool>&sign_vector, const std::set<std:
           sign[global_count] = !sign_vector[count];
         }
         if (limit == 0) {
-            side_points[side_point_count] = global_count;
-            side_point_count++;
+          side_points[side_point_count] = global_count;
+          sides[side_point_count][2] = true;
+          sides[side_point_count][3] = true;
+          side_point_count++;
         }
         global_count++;
       } else {
@@ -99,7 +113,9 @@ Graph::Graph(int delta, const std::vector<bool>&sign_vector, const std::set<std:
         //Save new side points 
         if (i == limit) {
           side_points[side_point_count] = global_count;
+          sides[side_point_count][2] = true;
           side_points[side_point_count + 2*limit] = global_count+1;
+          sides[side_point_count + 2*limit][3] = true;
           side_point_count++;
         }
 
@@ -117,11 +133,12 @@ Graph::Graph(int delta, const std::vector<bool>&sign_vector, const std::set<std:
       count++;
     }
   }
+  /*
   std::cout << "Vertex Map:\n";
   for (const auto& [key, value] : vertex_map) {
     std::cout << "Original: " << key << " -> New: " << value << "\n";
   }
-
+  */
 
   adjacency.resize(global_count);
   for (const auto& edge : edges) {
@@ -182,4 +199,42 @@ void Graph::connected_components() {
   }
 
 }
+
+void Graph::pre_isotopy_root() {
+  // Placeholder for pre-isotopy root logic
+  /*
+  We need to compute: 
+  nbs: A vector of sets of other sidepoints a point is connected to via its component
+  */
+
+  std::vector<std::set<int>> nbs(side_points.size());
+
+  for (size_t i = 0; i < side_points.size(); ++i) {
+    int vertex = side_points[i];
+    int comp = component[vertex];
+  }
+
+
+
+  /*
+  auto component2side_point = std::vector<std::set<int>>(component_adjacency.size());
+  for (size_t i = 0; i < side_points.size(); ++i) {
+    int vertex = side_points[i];
+    //int antipode = side_points[(i + 2 * delta) % (4 * delta)];
+
+    int comp = component[vertex];
+    component2side_point[comp].insert(vertex);
+  }
+  */
+
+}
+
+
+void Graph::isotopy_root() {
+
+}
+
+
+
+
 }

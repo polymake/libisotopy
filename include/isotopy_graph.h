@@ -13,6 +13,7 @@ struct Graph {
     std::vector<bool> sign;
     std::vector<std::set<int>> adjacency;
     std::vector<int> side_points; 
+    std::vector<std::vector<bool>> sides; //The sides of the square a sidepoint belongs to. 
 
     // Information about connected components
     std::vector<int> component; // component[i] gives the component index of vertex i
@@ -23,6 +24,8 @@ struct Graph {
     Graph(int delta, const std::vector<bool>& sign_vector, const std::set<std::pair<int, int>>& edges);
 
     void connected_components();
+    void pre_isotopy_root();
+    void isotopy_root();
     
 };
 

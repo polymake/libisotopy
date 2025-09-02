@@ -31,6 +31,34 @@ int main() {
     assert(graph.adjacency[10].size() == 4);
     assert(graph.adjacency[12].size() == 3);
     assert(graph.adjacency[9].size() == 6);
+
+    std::cout << "Graph side_points:\n";
+    for (size_t i = 0; i < graph.side_points.size(); ++i) {
+        std::cout << "Side point " << i << ": Vertex " << graph.side_points[i] << "\n";
+    }
+
+    assert(graph.sides.size() == 8);
+    assert(graph.sides[0] == std::vector<bool>({true, false, false, true}));
+    assert(graph.sides[1] == std::vector<bool>({true, false, false, false}));
+    assert(graph.sides[2] == std::vector<bool>({true, true, false, false}));
+    assert(graph.sides[3] == std::vector<bool>({false, true, false, false}));
+    assert(graph.sides[4] == std::vector<bool>({false, true, true, false}));
+    assert(graph.sides[5] == std::vector<bool>({false, false, true, false}));
+    assert(graph.sides[6] == std::vector<bool>({false, false, true, true}));
+    assert(graph.sides[7] == std::vector<bool>({false, false, false, true}));
+
+    assert(graph.side_points == std::vector<int>({2, 4, 5, 8, 7, 10, 12, 11}));
+    assert(graph.side_points.size() == 8);
+
+    for (size_t i = 0; i < graph.sides.size(); ++i) {
+        std::cout << "Side point " << i << ": Sides ";
+        for (size_t j = 0; j < graph.sides[i].size(); ++j) {
+            if (graph.sides[i][j]) {
+                std::cout << j << " ";
+            }
+        }
+        std::cout << "\n";
+    }
     
     /*
     std::cout << "Sign vector:\n";
@@ -49,6 +77,7 @@ int main() {
     assert(graph.component == std::vector<int>({0, 0, 0, 0, 0, 0, 1, 2, 1, 1, 2, 1, 2}));
 
     //Print all components
+    /*
     std::cout << "Number of components: " << graph.component_adjacency.size() << "\n";
     for (size_t c = 0; c < graph.component_adjacency.size(); ++c) {
         std::cout << "Component " << c << ": ";
@@ -60,8 +89,8 @@ int main() {
     for (size_t v = 0; v < graph.component.size(); ++v) {
         std::cout << "Vertex " << v << " is in component " << graph.component[v] << "\n";
     }
-
-
+    */
+    graph.isotopy_root();
 
     return 0;
 }
