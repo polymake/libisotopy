@@ -21,3 +21,13 @@ $(TEST_BIN): $(OBJ) $(TEST_OBJ)
 
 clean:
 	rm -f $(OBJ) $(TARGET) $(TEST_OBJ) $(TEST_BIN)
+
+ 
+debug: CXXFLAGS += -g -D_GLIBCXX_DEBUG -D_GLIBCXX_DEBUG_BACKTRACE
+debug: LDFLAGS = -g
+debug: TARGET = libisotopy_debug.so
+debug: $(TEST_BIN)
+	./$(TEST_BIN)
+
+$(TEST_BIN): $(OBJ) $(TEST_OBJ)
+	$(CXX) $(CXXFLAGS) -o $@ $^
