@@ -8,6 +8,10 @@ TEST_SRC = tests/isotopy_graph.cpp
 TEST_OBJ = $(TEST_SRC:.cpp=.o)
 TEST_BIN = isotopy_graph
 
+tests/catch.hpp:
+	curl -Ls https://github.com/catchorg/Catch2/releases/download/v2.13.10/catch.hpp -o tests/catch.hpp
+tests/isotopy_graph.o: tests/catch.hpp
+
 all: $(TARGET)
 
 $(TARGET): $(OBJ)
@@ -31,3 +35,4 @@ debug: $(TEST_BIN)
 
 $(TEST_BIN): $(OBJ) $(TEST_OBJ)
 	$(CXX) $(CXXFLAGS) -o $@ $^
+

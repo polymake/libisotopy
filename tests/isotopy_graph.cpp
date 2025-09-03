@@ -1,96 +1,73 @@
+#define CATCH_CONFIG_MAIN
+#include "catch.hpp"
 #include "isotopy_graph.h"
-#include <cassert>
-#include <iostream>
+#include <vector>
+#include <set>
 
-int main() {
-    
+TEST_CASE("Isotopy::Graph basic properties", "[isotopy_graph]") {
     int delta = 2;
     std::vector<bool> sign = {true, true, true, true, true, true};
     std::set<std::pair<int, int>> edges = {{0, 1}, {1, 2}, {0, 3}, {3, 4}, {2, 4}, {1,3}, {1,4}, {4,5}, {3,5}};
-    std::cout << "length of edges: " << edges.size() << "\n";
+    Isotopy::Graph graph(delta, sign, edges);
 
-    Isotopy::Graph graph = Isotopy::Graph(delta, sign, edges);
-
-    assert(graph.adjacency.size() == 13);
     size_t nverts_triang = (delta + 1) * (delta + 2) / 2;
-    size_t nvert_formula = 4 * nverts_triang - 4 * (delta + 1) +1;
-    assert(graph.adjacency.size() == nvert_formula);
-    
-    for (size_t vertex = 0; vertex < graph.adjacency.size(); ++vertex) {
-        std::cout << "Vertex " << vertex << ": ";
-        for (const auto& neighbor : graph.adjacency[vertex]) {
-            std::cout << neighbor << " ";
-        }
-        std::cout << "\n";
+    size_t nvert_formula = 4 * nverts_triang - 4 * (delta + 1) + 1;
+
+    SECTION("Adjacency size") {
+        REQUIRE(graph.adjacency.size() == nvert_formula);
     }
 
-    
-    // Adjacency size checks
-    assert(graph.adjacency[0].size() == 4);
-    assert(graph.adjacency[1].size() == 6);
-    assert(graph.adjacency[10].size() == 4);
-    assert(graph.adjacency[12].size() == 3);
-    assert(graph.adjacency[9].size() == 6);
-
-    std::cout << "Graph side_points:\n";
-    for (size_t i = 0; i < graph.side_points.size(); ++i) {
-        std::cout << "Side point " << i << ": Vertex " << graph.side_points[i] << "\n";
+    SECTION("Adjacency details") {
+        REQUIRE(graph.adjacency[0].size() == 4);
+        REQUIRE(graph.adjacency[1].size() == 6);
+        REQUIRE(graph.adjacency[10].size() == 4);
+        REQUIRE(graph.adjacency[12].size() == 3);
+        REQUIRE(graph.adjacency[9].size() == 6);
     }
 
-    assert(graph.sides.size() == 8);
-    assert(graph.sides[0] == std::vector<bool>({true, false, false, true}));
-    assert(graph.sides[1] == std::vector<bool>({true, false, false, false}));
-    assert(graph.sides[2] == std::vector<bool>({true, true, false, false}));
-    assert(graph.sides[3] == std::vector<bool>({false, true, false, false}));
-    assert(graph.sides[4] == std::vector<bool>({false, true, true, false}));
-    assert(graph.sides[5] == std::vector<bool>({false, false, true, false}));
-    assert(graph.sides[6] == std::vector<bool>({false, false, true, true}));
-    assert(graph.sides[7] == std::vector<bool>({false, false, false, true}));
-
-    assert(graph.side_points == std::vector<int>({2, 4, 5, 8, 7, 10, 12, 11}));
-    assert(graph.side_points.size() == 8);
-
-    for (size_t i = 0; i < graph.sides.size(); ++i) {
-        std::cout << "Side point " << i << ": Sides ";
-        for (size_t j = 0; j < graph.sides[i].size(); ++j) {
-            if (graph.sides[i][j]) {
-                std::cout << j << " ";
-            }
-        }
-        std::cout << "\n";
+    SECTION("Side points and sides") {
+        REQUIRE(graph.sides.size() == 8);
+        REQUIRE(graph.sides[0] == std::vector<bool>({true, false, false, true}));
+        REQUIRE(graph.sides[1] == std::vector<bool>({true, false, false, false}));
+        REQUIRE(graph.sides[2] == std::vector<bool>({true, true, false, false}));
+        REQUIRE(graph.sides[3] == std::vector<bool>({false, true, false, false}));
+        REQUIRE(graph.sides[4] == std::vector<bool>({false, true, true, false}));
+        REQUIRE(graph.sides[5] == std::vector<bool>({false, false, true, false}));
+        REQUIRE(graph.sides[6] == std::vector<bool>({false, false, true, true}));
+        REQUIRE(graph.sides[7] == std::vector<bool>({false, false, false, true}));
+        REQUIRE(graph.side_points == std::vector<int>({2, 4, 5, 8, 7, 10, 12, 11}));
+        REQUIRE(graph.side_points.size() == 8);
     }
-    
-    /*
-    std::cout << "Sign vector:\n";
-    for (size_t i = 0; i < graph.adjacency.size(); ++i) {
-        std::cout << "Vertex " << i << ": Sign " << graph.sign[i] << "\n";
+
+    SECTION("Sign vector") {
+        REQUIRE(graph.sign == std::vector<bool>({true, true, true, true, true, true, false, true, false, false, true, false, true}));
     }
-    */
-    //Sign vector checks
-    assert(graph.sign == std::vector<bool>({true, true, true, true, true, true, false, true, false, false, true, false, true}));
 
-
-    graph.connected_components();
-    
-    assert(graph.component.size() == graph.adjacency.size());
-    assert(graph.component_adjacency.size() == 3);
-    assert(graph.component == std::vector<int>({0, 0, 0, 0, 0, 0, 1, 2, 1, 1, 2, 1, 2}));
-
-    //Print all components
-    /*
-    std::cout << "Number of components: " << graph.component_adjacency.size() << "\n";
-    for (size_t c = 0; c < graph.component_adjacency.size(); ++c) {
-        std::cout << "Component " << c << ": ";
-        for (const auto& neighbor_comp : graph.component_adjacency[c]) {
-            std::cout << neighbor_comp << " ";
-        }
-        std::cout << "\n";
+    SECTION("Connected components") {
+        graph.connected_components();
+        REQUIRE(graph.component.size() == graph.adjacency.size());
+        REQUIRE(graph.component_adjacency.size() == 3);
+        REQUIRE(graph.component == std::vector<int>({0, 0, 0, 0, 0, 0, 1, 2, 1, 1, 2, 1, 2}));
     }
-    for (size_t v = 0; v < graph.component.size(); ++v) {
-        std::cout << "Vertex " << v << " is in component " << graph.component[v] << "\n";
-    }
-    */
-    graph.isotopy_root();
 
-    return 0;
+    SECTION("Pre isotopy root and nbs") {
+        graph.connected_components();
+        graph.pre_isotopy_root();
+        REQUIRE(graph.nbs.size() == graph.side_points.size());
+        REQUIRE(graph.nbs[0] == std::set<int>({1, 2}));
+        REQUIRE(graph.nbs[1] == std::set<int>({0, 2}));
+        REQUIRE(graph.nbs[2] == std::set<int>({0, 1}));
+        REQUIRE(graph.nbs[3] == std::set<int>({7}));
+        REQUIRE(graph.nbs[4] == std::set<int>({5, 6}));
+        REQUIRE(graph.nbs[5] == std::set<int>({4, 6}));
+        REQUIRE(graph.nbs[6] == std::set<int>({4, 5}));
+        REQUIRE(graph.nbs[7] == std::set<int>({3}));
+    }
+
+    SECTION("Isotopy root") {
+        graph.connected_components();
+        graph.pre_isotopy_root();
+        graph.isotopy_root();
+        REQUIRE(graph.root == 1);
+    }
 }

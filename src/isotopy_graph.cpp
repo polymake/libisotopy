@@ -3,6 +3,7 @@
 #include <stdexcept>
 #include <algorithm>
 #include <iostream>
+#include <unordered_map>
 
 namespace Isotopy {
 
@@ -189,52 +190,97 @@ void Graph::connected_components() {
       component_count++;
     }
   }
-  std::cout << "Total components found: " << component_count << "\n";
-  for (size_t c = 0; c < component_adjacency.size(); ++c) {
-    std::cout << "Component " << c << " is adjacent to components: ";
-    for (int adj : component_adjacency[c]) {
-      std::cout << adj << " ";
-    }
-    std::cout << "\n";
-  }
 
 }
 
 void Graph::pre_isotopy_root() {
-  // Placeholder for pre-isotopy root logic
   /*
   We need to compute: 
   nbs: A vector of sets of other sidepoints a point is connected to via its component
   */
-
-  std::vector<std::set<int>> nbs(side_points.size());
-
+  nbs.resize(side_points.size());
+  std::unordered_map<int, std::vector<int>> comp_to_indices;
   for (size_t i = 0; i < side_points.size(); ++i) {
     int vertex = side_points[i];
     int comp = component[vertex];
+    comp_to_indices[comp].push_back(i);
   }
 
+  for (const auto& pair : comp_to_indices) {
+    const std::vector<int>& indices = pair.second;
+    for (int idx : indices) {
+      for (int other_idx : indices) {
+        if (idx != other_idx) {
+          nbs[idx].insert(other_idx);
+        }
+      }
+    }
+  }
+  //int antipode = side_points[(i + 2 * delta) % (4 * delta)];
+}
 
 
-  /*
-  auto component2side_point = std::vector<std::set<int>>(component_adjacency.size());
+int Graph::isotopy_root() {
+
+  int N = 4 * delta; // total number of indices
+
   for (size_t i = 0; i < side_points.size(); ++i) {
-    int vertex = side_points[i];
-    //int antipode = side_points[(i + 2 * delta) % (4 * delta)];
+    int antipode_i = (i + 2 * delta) % N;
+    //First check if the antipode is in the same component
+    //If this is the case return the component of the current side point
+    if (nbs[i].find(antipode_i) != nbs[i].end()) {
+      root = component[side_points[i]];
+      return root;
+    }
 
-    int comp = component[vertex];
-    component2side_point[comp].insert(vertex);
+    //Check if the sidepoint is connected to antipodel sides, aka sides 0 and 2 or sides 1 and 3
+    if ((sides[i][0] && sides[i][2]) || (sides[i][1] && sides[i][3]))  continue; // Do nothing
+
+    // Check that i together with nbs[i] forms a connected sequence of integers (e.g., {3,4,5,6}),
+    // considering indices as circular (0 is next to 4*delta-1)
+    std::set<int> all_indices = nbs[i];
+    all_indices.insert(i);
+    int min_idx = *std::min_element(all_indices.begin(), all_indices.end());
+    int max_idx = *std::max_element(all_indices.begin(), all_indices.end());
+    bool is_connected = false;
+    if ((max_idx - min_idx + 1) == (int)all_indices.size()) {
+      is_connected = true; // linear connected
+    } else if ((int)all_indices.size() == N - (max_idx - min_idx - 1)) {
+      // circular connected: indices wrap around
+      // e.g., {N-2, N-1, 0, 1}
+      is_connected = true;
+    }
+
+    if (!is_connected) continue; // Do nothing 
+
+    int j = (i-1) % N;
+    //merge the nbs of i and j
+    nbs[j].insert(nbs[i].begin(), nbs[i].end());
+    nbs[i] = nbs[j];
+    //Update sides of j to include sides of i
+    for (size_t k = 0; k < 4; ++k) {
+      sides[j][k] = sides[j][k] || sides[i][k];
+      sides[i][k] = sides[j][k];
+    }
+    //Change the component of side point i to that of j
+    component[side_points[i]] = component[side_points[j]];
+    //Check if antipode of j is in nbs[j] or the antipode of i is in nbs[j]
+    int antipode_j = (j + 2 * delta) % N;
+    if (nbs[j].find(antipode_j) != nbs[j].end() || nbs[j].find(antipode_i) != nbs[j].end()) {
+      root = component[side_points[j]];
+      return root;
+    }
+
+    //Merge antipode_i with antipode_j
+    nbs[antipode_j].insert(nbs[antipode_i].begin(), nbs[antipode_i].end());
+    nbs[antipode_i] = nbs[antipode_j];
+    //Update sides of antipode_j to include sides of antipode_i
+    for (size_t k = 0; k < 4; ++k) {
+      sides[antipode_j][k] = sides[antipode_j][k] || sides[antipode_i][k];
+      sides[antipode_i][k] = sides[antipode_j][k];
+    }
   }
-  */
-
+  return -1; // No isotopy root found
 }
-
-
-void Graph::isotopy_root() {
-
-}
-
-
-
 
 }
