@@ -7,6 +7,21 @@
 
 namespace Isotopy {
 
+Graph::Graph(int delta, const std::vector<bool>&sign_vector, const std::set<std::set<int>>& triangles) {
+  std::set<std::pair<int, int>> edges;
+  for (const auto& triangle : triangles) {
+    if (triangle.size() != 3) {
+      throw std::invalid_argument("Each triangle must have exactly 3 vertices.");
+    }
+    std::vector<int> verts(triangle.begin(), triangle.end());
+    edges.insert({verts[0], verts[1]});
+    edges.insert({verts[1], verts[2]});
+    edges.insert({verts[2], verts[0]});
+  }
+  *this = Graph(delta, sign_vector, edges);
+}
+
+
 Graph::Graph(int delta, const std::vector<bool>&sign_vector, const std::set<std::pair<int, int>>& edges)
 : delta(delta) {
   std::size_t nverts = (delta + 1) * (delta + 2) / 2;
@@ -221,66 +236,196 @@ void Graph::pre_isotopy_root() {
 
 
 int Graph::isotopy_root() {
-
   int N = 4 * delta; // total number of indices
 
+  // Create copies to avoid modifying the original data
+  auto nbs_copy = nbs;
+  auto sides_copy = sides;
+  auto component_copy = component;
+  
+  
+  size_t max_iterations = 5; // Prevent infinite loops
+
+  for (size_t iter = 0; iter < max_iterations; ++iter) {
   for (size_t i = 0; i < side_points.size(); ++i) {
     int antipode_i = (i + 2 * delta) % N;
     //First check if the antipode is in the same component
     //If this is the case return the component of the current side point
-    if (nbs[i].find(antipode_i) != nbs[i].end()) {
-      root = component[side_points[i]];
+    if (nbs_copy[i].find(antipode_i) != nbs_copy[i].end()) {
+      root = component_copy[side_points[i]];
       return root;
     }
 
     //Check if the sidepoint is connected to antipodel sides, aka sides 0 and 2 or sides 1 and 3
-    if ((sides[i][0] && sides[i][2]) || (sides[i][1] && sides[i][3]))  continue; // Do nothing
+    if ((sides_copy[i][0] && sides_copy[i][2]) || (sides_copy[i][1] && sides_copy[i][3]))  continue; // Do nothing
 
     // Check that i together with nbs[i] forms a connected sequence of integers (e.g., {3,4,5,6}),
     // considering indices as circular (0 is next to 4*delta-1)
-    std::set<int> all_indices = nbs[i];
+    std::set<int> all_indices = nbs_copy[i];
     all_indices.insert(i);
     int min_idx = *std::min_element(all_indices.begin(), all_indices.end());
     int max_idx = *std::max_element(all_indices.begin(), all_indices.end());
     bool is_connected = false;
     if ((max_idx - min_idx + 1) == (int)all_indices.size()) {
       is_connected = true; // linear connected
-    } else if ((int)all_indices.size() == N - (max_idx - min_idx - 1)) {
-      // circular connected: indices wrap around
-      // e.g., {N-2, N-1, 0, 1}
-      is_connected = true;
+    } else {
+      //THIS IS AN ISSUE
+      //PLEASE FIX
+      //THis ignores wrap around cases, e,g {29,30,31,0,1} for delta = 8
+      //NOTE: I believe this is not an issue since it will just merge the opposite side points.
+      is_connected = false;
     }
+    /*
+    if (i < 5) {
+      std::cout << "Iteration: " << iter << "\n";
+      std::cout << "i: " << i << " nbs: ";
+      for (int nb : nbs_copy[i]) {
+        std::cout << nb << " ";
+      }
+      std::cout << " is_connected: " << is_connected << "\n";
+    }
+    */
 
     if (!is_connected) continue; // Do nothing 
 
     int j = (i-1) % N;
     //merge the nbs of i and j
-    nbs[j].insert(nbs[i].begin(), nbs[i].end());
-    nbs[i] = nbs[j];
+    std::set<int> merged_nbs;
+    merged_nbs.insert(nbs_copy[i].begin(), nbs_copy[i].end());
+    merged_nbs.insert(nbs_copy[j].begin(), nbs_copy[j].end());
+    merged_nbs.insert(i);
+    merged_nbs.insert(j);
+
     //Update sides of j to include sides of i
+    std::vector<bool> new_sides(4, false);
+
     for (size_t k = 0; k < 4; ++k) {
-      sides[j][k] = sides[j][k] || sides[i][k];
-      sides[i][k] = sides[j][k];
+      new_sides[k] = sides_copy[i][k] || sides_copy[j][k];
     }
     //Change the component of side point i to that of j
-    component[side_points[i]] = component[side_points[j]];
+    component_copy[side_points[i]] = component_copy[side_points[j]];
     //Check if antipode of j is in nbs[j] or the antipode of i is in nbs[j]
     int antipode_j = (j + 2 * delta) % N;
-    if (nbs[j].find(antipode_j) != nbs[j].end() || nbs[j].find(antipode_i) != nbs[j].end()) {
-      root = component[side_points[j]];
+    if (nbs_copy[j].find(antipode_j) != nbs_copy[j].end() || nbs_copy[j].find(antipode_i) != nbs_copy[j].end()) {
+      root = component_copy[side_points[j]];
       return root;
+    }
+    //Update all elements in merged_nbs to have the same nbs and sides
+    for (int idx : merged_nbs) {
+      nbs_copy[idx] = merged_nbs;
+      sides_copy[idx] = new_sides;
+      component_copy[side_points[idx]] = component_copy[side_points[j]];
     }
 
     //Merge antipode_i with antipode_j
-    nbs[antipode_j].insert(nbs[antipode_i].begin(), nbs[antipode_i].end());
-    nbs[antipode_i] = nbs[antipode_j];
-    //Update sides of antipode_j to include sides of antipode_i
+    std::set<int> merged_nbs_anti;
+    merged_nbs_anti = nbs_copy[antipode_j];
+    merged_nbs_anti.insert(antipode_i);
+     //Update sides of antipode_j to include sides of antipode_i
+    std::vector<bool> new_sides_anti(4, false);
+
     for (size_t k = 0; k < 4; ++k) {
-      sides[antipode_j][k] = sides[antipode_j][k] || sides[antipode_i][k];
-      sides[antipode_i][k] = sides[antipode_j][k];
+      new_sides_anti[k] = sides[antipode_i][k] || sides_copy[antipode_j][k];
+    }
+
+    component_copy[side_points[antipode_i]] = component_copy[side_points[antipode_j]];
+    
+    for (int idx : merged_nbs_anti) {
+      nbs_copy[idx] = merged_nbs_anti;
+      sides_copy[idx] = new_sides_anti;
+    }
+
+  }
+  }
+  std::cerr << "Warning: No isotopy root found after maximum iterations.\n";
+  return -1; // No isotopy root found
+}
+
+void Graph::calculate_regions() {
+  if (root == -1) {
+    root = isotopy_root();
+  }
+
+  // Build component_antipod_adjacency
+  std::vector<std::set<int>> component_antipode_adjacency(component_adjacency.size());
+  for (size_t i = 0; i < side_points.size(); ++i) {
+    int comp = component[side_points[i]];
+    int antipodal_comp = component[side_points[(i + 2 * delta) % (4 * delta)]];
+    component_antipode_adjacency[comp].insert(antipodal_comp);
+  }
+
+  region.resize(component_adjacency.size(), -1);
+  int curr = 0;
+  for (size_t i = 0; i < region.size(); ++i) {
+    if (region[i] == -1) {
+      std::set<int> stack;
+      stack.insert(i);
+      while (!stack.empty()) {
+        int current = *stack.begin();
+        stack.erase(stack.begin());
+        region[current] = curr;
+        for (int neighbor : component_antipode_adjacency[current]) {
+          if (region[neighbor] == -1) {
+            stack.insert(neighbor);
+          }
+        }
+      }
+      curr++;
     }
   }
-  return -1; // No isotopy root found
+
+
+  region_adjacency.resize(curr, std::set<int>());
+  for (size_t i = 0; i < component_adjacency.size(); ++i) {
+    for (int adj_comp : component_adjacency[i]) {
+      region_adjacency[region[i]].insert(region[adj_comp]);
+    }
+  }
+  root_region = region[root];
+}
+
+void Graph::isotopy_type() {
+  if (component.empty()) {
+    connected_components();
+  }
+  if (root == -1) {
+    pre_isotopy_root();
+    root = isotopy_root();
+    if (root == -1) {
+      throw std::runtime_error("No isotopy root found");
+    }
+  }
+  if (region_adjacency.empty()) {
+    calculate_regions();
+  }
+
+
+
+  region_sign.resize(region_adjacency.size(), false);
+
+  std::set<int> stack;
+  stack.insert(root_region);
+  region_sign[root_region] = false; 
+  std::set<int> visited;
+
+  while (!stack.empty()) {
+    int current = *stack.begin();
+    stack.erase(stack.begin());
+    visited.insert(current);
+    if (region_sign[current]) {
+      p_regions++;
+    } else {
+      n_regions++;
+    }
+
+    for (int neighbor : region_adjacency[current]) {
+      if (visited.find(neighbor) == visited.end()) {
+        region_sign[neighbor] = !region_sign[current];
+        edges.insert({current, neighbor});
+        stack.insert(neighbor);
+      }
+    }
+  }
 }
 
 }

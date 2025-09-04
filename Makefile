@@ -8,31 +8,34 @@ TEST_SRC = tests/isotopy_graph.cpp
 TEST_OBJ = $(TEST_SRC:.cpp=.o)
 TEST_BIN = isotopy_graph
 
-tests/catch.hpp:
-	curl -Ls https://github.com/catchorg/Catch2/releases/download/v2.13.10/catch.hpp -o tests/catch.hpp
-tests/isotopy_graph.o: tests/catch.hpp
-
 all: $(TARGET)
 
 $(TARGET): $(OBJ)
-	$(CXX) $(CXXFLAGS) -shared -o $@ $^
+	$(CXX) -shared -o $@ $^
 
 test: $(TEST_BIN)
 	./$(TEST_BIN)
 
-$(TEST_BIN): $(OBJ) $(TEST_OBJ)
-	$(CXX) $(CXXFLAGS) -o $@ $^
+$(TEST_BIN): $(TARGET) $(TEST_OBJ)
+	$(CXX) -o $@ $^ -L. -Wl,-rpath,\$$ORIGIN -lisotopy
+
+
+BENCHMARK_SRC = tests/benchmark.cpp
+BENCHMARK_OBJ = $(BENCHMARK_SRC:.cpp=.o)
+BENCHMARK_BIN = isotopy_graph
+
+	./$(BENCHMARK_BIN)
+
+$(BENCHMARK_BIN): $(TARGET) $(BENCHMARK_OBJ)
+	$(CXX) -o $@ $^ -L. -Wl,-rpath,\$$ORIGIN -lisotopy
 
 clean:
 	rm -f $(OBJ) $(TARGET) $(TEST_OBJ) $(TEST_BIN)
 
  
-debug: CXXFLAGS += -g -D_GLIBCXX_DEBUG -D_GLIBCXX_DEBUG_BACKTRACE
-debug: LDFLAGS = -g
-debug: TARGET = libisotopy_debug.so
-debug: $(TEST_BIN)
+debug_test: CXXFLAGS += -g -D_GLIBCXX_DEBUG -D_GLIBCXX_DEBUG_BACKTRACE
+debug_test: LDFLAGS = -g
+debug_test: $(TEST_BIN)
 	./$(TEST_BIN)
 
-$(TEST_BIN): $(OBJ) $(TEST_OBJ)
-	$(CXX) $(CXXFLAGS) -o $@ $^
 

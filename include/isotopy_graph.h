@@ -22,13 +22,26 @@ struct Graph {
     std::vector<int> component; // component[i] gives the component index of vertex i
     std::vector<std::set<int>> component_adjacency; // component_adjacency[c] gives the set of components adjacent to component c
 
+    int root_region = -1; // region index of the root component
+    std::vector<int> region; // region[c] gives the region index of component cA
+    std::vector<std::set<int>> region_adjacency; // region_adjacency[r] gives the set of regions adjacent to region r
+    std::vector<bool> region_sign; // region_sign[r] gives the sign of region r (true for positive, false for negative)
+
+    std::set<std::pair<int, int>> edges = std::set<std::pair<int, int>>(); // Edges of the Tree representing the isotopy graph
+
+    int p_regions = 0;
+    int n_regions = -1;
+
     
     Graph() = default;
     Graph(int delta, const std::vector<bool>& sign_vector, const std::set<std::pair<int, int>>& edges);
+    Graph(int delta, const std::vector<bool>& sign_vector, const std::set<std::set<int>>& triangles);
 
     void connected_components();
     void pre_isotopy_root();
     int isotopy_root();
+    void calculate_regions();
+    void isotopy_type();
     
 };
 
