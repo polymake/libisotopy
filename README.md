@@ -2,6 +2,8 @@
 
 A C++ shared library for computing isotopy types of patchworks.
 
+**Warning:** While the core algorithm is tested, usage of this library in other projects is not. Use with caution and report any issues you encounter.
+
 ## Documentation
 For detailed API documentation, use the man page:  
 ```sh
