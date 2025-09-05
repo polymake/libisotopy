@@ -13,6 +13,10 @@ man docs/man/man3/Isotopy_Graph.3
 - Provides the `Isotopy::Graph` class for representing isotopy types of patchworks.
 - Methods to compute isotopy types and generate Viro notation. 
 
+## Examples
+
+Examples can be found as test cases in the file `tests/isotopy_graph.cpp`.
+
 ## Building
 
 This project uses a Makefile for building the shared library and running tests.
