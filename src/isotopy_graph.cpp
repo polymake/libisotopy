@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <iostream>
 #include <unordered_map>
+#include <functional>
 
 namespace Isotopy {
 
@@ -209,10 +210,11 @@ void Graph::connected_components() {
 }
 
 void Graph::pre_isotopy_root() {
-  /*
-  We need to compute: 
-  nbs: A vector of sets of other sidepoints a point is connected to via its component
-  */
+  if (component.empty()) {
+    connected_components();
+  }
+
+
   nbs.resize(side_points.size());
   std::unordered_map<int, std::vector<int>> comp_to_indices;
   for (size_t i = 0; i < side_points.size(); ++i) {
@@ -236,6 +238,10 @@ void Graph::pre_isotopy_root() {
 
 
 int Graph::isotopy_root() {
+  if (nbs.empty()) {
+    pre_isotopy_root();
+  }
+
   int N = 4 * delta; // total number of indices
 
   // Create copies to avoid modifying the original data
@@ -342,9 +348,6 @@ int Graph::isotopy_root() {
 }
 
 void Graph::calculate_regions() {
-  if (root == -1) {
-    root = isotopy_root();
-  }
 
   // Build component_antipod_adjacency
   std::vector<std::set<int>> component_antipode_adjacency(component_adjacency.size());
@@ -381,25 +384,18 @@ void Graph::calculate_regions() {
       region_adjacency[region[i]].insert(region[adj_comp]);
     }
   }
-  root_region = region[root];
 }
 
 void Graph::isotopy_type() {
-  if (component.empty()) {
-    connected_components();
-  }
   if (root == -1) {
-    pre_isotopy_root();
-    root = isotopy_root();
-    if (root == -1) {
-      throw std::runtime_error("No isotopy root found");
-    }
+    isotopy_root();
   }
+
   if (region_adjacency.empty()) {
     calculate_regions();
   }
 
-
+  root_region = region[root];
 
   region_sign.resize(region_adjacency.size(), false);
 
@@ -426,6 +422,79 @@ void Graph::isotopy_type() {
       }
     }
   }
+}
+
+std::string Graph::viro_notation(bool unicode) {
+  if (region_adjacency.empty()) {
+    isotopy_type();
+  }
+  return Isotopy::viro_notation(region[root], region_adjacency, unicode);
+}
+
+std::string viro_notation(int root_region, const std::vector<std::set<int>>& region_adjacency, bool unicode) {
+  const std::string open_delim = unicode ? "\u27E8" : "<";
+  const std::string close_delim = unicode ? "\u27E9" : ">";
+  const std::string sep = unicode ? "\u2294" : "v";
+
+  std::function<std::string(int, std::set<int>&)> dfs =
+    [&](int curr_region, std::set<int>& visited) -> std::string {
+      visited.insert(curr_region);
+      int leaf_count = 0;
+      std::vector<int> non_leaf_children;
+      for (const auto& neighbor : region_adjacency[curr_region]) {
+        if (!visited.count(neighbor)) {
+          bool is_leaf = true;
+          for (const auto& nn : region_adjacency[neighbor]) {
+            if (!visited.count(nn) && nn != curr_region) {
+              is_leaf = false;
+              break;
+            }
+          }
+          if (is_leaf) {
+            leaf_count++;
+            visited.insert(neighbor);
+          } else {
+            non_leaf_children.push_back(neighbor);
+          }
+        }
+      }
+      if (non_leaf_children.empty()) {
+        return open_delim + std::to_string(leaf_count) + close_delim;
+      } else if (leaf_count == 0 && non_leaf_children.size() == 1) {
+        return open_delim + "1" + dfs(non_leaf_children[0], visited) + close_delim;
+      } else {
+        std::vector<std::string> child_types;
+        for (const auto& child : non_leaf_children) {
+          child_types.push_back(dfs(child, visited));
+        }
+        std::map<std::string, int> type_counts;
+        for (const auto& t : child_types) {
+          type_counts[t]++;
+        }
+        std::vector<std::pair<int, std::string>> count_type_pairs;
+        for (auto it = type_counts.begin(); it != type_counts.end(); ++it) {
+          count_type_pairs.emplace_back(it->second, it->first);
+        }
+        std::sort(count_type_pairs.begin(), count_type_pairs.end());
+        std::vector<std::string> grouped_types;
+        for (const auto& pair : count_type_pairs) {
+          grouped_types.push_back(std::to_string(pair.first) + pair.second);
+        }
+        std::string result = open_delim;
+        if (leaf_count > 0) {
+          result += std::to_string(leaf_count) + sep;
+        }
+        for (size_t i = 0; i < grouped_types.size(); ++i) {
+          if (i > 0) result += sep;
+          result += grouped_types[i];
+        }
+        result += close_delim;
+        return result;
+      }
+    };
+
+  std::set<int> visited;
+  return dfs(root_region, visited);
 }
 
 }

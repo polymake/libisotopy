@@ -20,22 +20,21 @@ $(TEST_BIN): $(TARGET) $(TEST_OBJ)
 	$(CXX) -o $@ $^ -L. -Wl,-rpath,\$$ORIGIN -lisotopy
 
 
-BENCHMARK_SRC = tests/benchmark.cpp
-BENCHMARK_OBJ = $(BENCHMARK_SRC:.cpp=.o)
-BENCHMARK_BIN = isotopy_graph
+TEST_BATCH_SRC = tests/isotopy_graph_batch.cpp
+TEST_BATCH_OBJ = $(TEST_BATCH_SRC:.cpp=.o)
+TEST_FULL_BIN = isotopy_graph_full
 
-	./$(BENCHMARK_BIN)
+test_full: $(TEST_FULL_BIN)
+	./$(TEST_FULL_BIN)
 
-$(BENCHMARK_BIN): $(TARGET) $(BENCHMARK_OBJ)
+$(TEST_FULL_BIN): $(TARGET) $(TEST_OBJ) $(TEST_BATCH_OBJ)
 	$(CXX) -o $@ $^ -L. -Wl,-rpath,\$$ORIGIN -lisotopy
 
 clean:
-	rm -f $(OBJ) $(TARGET) $(TEST_OBJ) $(TEST_BIN)
+	rm -f $(OBJ) $(TARGET) $(TEST_OBJ) $(TEST_BIN) $(TEST_BATCH_OBJ) $(TEST_FULL_BIN)
 
  
 debug_test: CXXFLAGS += -g -D_GLIBCXX_DEBUG -D_GLIBCXX_DEBUG_BACKTRACE
 debug_test: LDFLAGS = -g
 debug_test: $(TEST_BIN)
 	./$(TEST_BIN)
-
-

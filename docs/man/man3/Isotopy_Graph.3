@@ -1,0 +1,274 @@
+.TH "Isotopy::Graph" 3 "libisotopy" \" -*- nroff -*-
+.ad l
+.nh
+.SH NAME
+Isotopy::Graph \- Represents an isotopy type as a graph and provides methods for isotopy type computation\&.  
+
+.SH SYNOPSIS
+.br
+.PP
+.PP
+\fR#include <isotopy_graph\&.h>\fP
+.SS "Public Member Functions"
+
+.in +1c
+.ti -1c
+.RI "\fBGraph\fP ()=default"
+.br
+.RI "Constructs an empty graph\&. "
+.ti -1c
+.RI "\fBGraph\fP (int \fBdelta\fP, const std::vector< bool > &sign_vector, const std::set< std::pair< int, int > > &\fBedges\fP)"
+.br
+.RI "Constructs a graph from a sign vector and a set of edges\&. "
+.ti -1c
+.RI "\fBGraph\fP (int \fBdelta\fP, const std::vector< bool > &sign_vector, const std::set< std::set< int > > &triangles)"
+.br
+.RI "Constructs a graph from a sign vector and a set of triangles\&. "
+.ti -1c
+.RI "void \fBconnected_components\fP ()"
+.br
+.RI "Computes the connected components of the graph\&. "
+.ti -1c
+.RI "void \fBpre_isotopy_root\fP ()"
+.br
+.RI "Prepares neighbor sets for isotopy root computation\&. "
+.ti -1c
+.RI "int \fBisotopy_root\fP ()"
+.br
+.RI "Computes the isotopy root of the graph\&. "
+.ti -1c
+.RI "void \fBcalculate_regions\fP ()"
+.br
+.RI "Calculates the regions of the graph based on component antipode adjacency\&. "
+.ti -1c
+.RI "void \fBisotopy_type\fP ()"
+.br
+.RI "Computes the full isotopy type of the graph\&. "
+.ti -1c
+.RI "std::string \fBviro_notation\fP (bool unicode=false)"
+.br
+.RI "Returns the Viro notation for the isotopy type of the graph\&. "
+.ti -1c
+.RI "int \fBeven_regions\fP ()"
+.br
+.RI "Returns the number of even regions in the isotopy decomposition\&. "
+.ti -1c
+.RI "int \fBodd_regions\fP ()"
+.br
+.RI "Returns the number of odd regions in the isotopy decomposition\&. "
+.ti -1c
+.RI "bool \fBis_mcurve\fP ()"
+.br
+.RI "Checks if the graph represents an M-curve\&. "
+.ti -1c
+.RI "void \fBlazy_compute\fP (bool need_components, bool need_root, bool need_regions, bool need_region_counts)"
+.br
+.in -1c
+.SS "Public Attributes"
+
+.in +1c
+.ti -1c
+.RI "int \fBdelta\fP"
+.br
+.RI "Number of side points (vertices)\&. "
+.ti -1c
+.RI "std::vector< bool > \fBsign\fP"
+.br
+.RI "Sign vector with a boolean value for each vertex\&. "
+.ti -1c
+.RI "std::vector< std::set< int > > \fBadjacency\fP"
+.br
+.RI "Adjacency list for the graph\&. "
+.ti -1c
+.RI "std::vector< int > \fBside_points\fP"
+.br
+.RI "Maps side point index to vertex index\&. "
+.ti -1c
+.RI "std::vector< std::vector< bool > > \fBsides\fP"
+.br
+.RI "sides[i][j] is true if sidepoint i is on side j (0: top-right, 1: bottom-right, 2: bottom-left, 3: top-left)\&. "
+.ti -1c
+.RI "std::vector< std::set< int > > \fBnbs\fP"
+.br
+.RI "nbs[i] gives the set of other sidepoints connected to sidepoint i via its component\&. "
+.ti -1c
+.RI "int \fBroot\fP = \-1"
+.br
+.RI "Root component index\&. "
+.ti -1c
+.RI "std::vector< int > \fBcomponent\fP"
+.br
+.RI "component[i] gives the component index of vertex i\&. "
+.ti -1c
+.RI "std::vector< std::set< int > > \fBcomponent_adjacency\fP"
+.br
+.RI "component_adjacency[c] gives the set of components adjacent to component c\&. "
+.ti -1c
+.RI "int \fBroot_region\fP = \-1"
+.br
+.RI "Region index of the root component\&. "
+.ti -1c
+.RI "std::vector< int > \fBregion\fP"
+.br
+.RI "region[c] gives the region index of component c\&. "
+.ti -1c
+.RI "std::vector< std::set< int > > \fBregion_adjacency\fP"
+.br
+.RI "region_adjacency[r] gives the set of regions adjacent to region r\&. "
+.ti -1c
+.RI "std::vector< bool > \fBregion_sign\fP"
+.br
+.RI "region_sign[r] gives the sign of region r (true for positive, false for negative)\&. "
+.ti -1c
+.RI "std::set< std::pair< int, int > > \fBedges\fP = std::set<std::pair<int, int>>()"
+.br
+.RI "Edges of the tree representing the isotopy graph\&. "
+.ti -1c
+.RI "int \fBp_regions\fP = 0"
+.br
+.RI "Number of even regions\&. "
+.ti -1c
+.RI "int \fBn_regions\fP = \-1"
+.br
+.RI "Number of odd regions\&. "
+.in -1c
+.SH "Detailed Description"
+.PP 
+Represents an isotopy type as a graph and provides methods for isotopy type computation\&. 
+
+The \fBGraph\fP struct encapsulates the data and algorithms needed to construct a graph from side points and edges or triangles, compute isotopy invariants, and generate Viro notation\&. 
+.SH "Constructor & Destructor Documentation"
+.PP 
+.SS "Isotopy::Graph::Graph ()\fR [default]\fP"
+
+.PP
+Constructs an empty graph\&. Initializes an empty graph with no vertices, edges, or triangles\&. 
+.SS "Isotopy::Graph::Graph (int delta, const std::vector< bool > & sign_vector, const std::set< std::pair< int, int > > & edges)"
+
+.PP
+Constructs a graph from a sign vector and a set of edges\&. 
+.PP
+\fBParameters\fP
+.RS 4
+\fIdelta\fP The number of vertices\&. 
+.br
+\fIsign_vector\fP The sign vector with a boolean value for each vertex\&. 
+.br
+\fIedges\fP The set of edges, each represented as a pair of vertex indices\&. 
+.RE
+.PP
+
+.SS "Isotopy::Graph::Graph (int delta, const std::vector< bool > & sign_vector, const std::set< std::set< int > > & triangles)"
+
+.PP
+Constructs a graph from a sign vector and a set of triangles\&. 
+.PP
+\fBParameters\fP
+.RS 4
+\fIdelta\fP The number of vertices\&. 
+.br
+\fIsign_vector\fP The sign vector with a boolean value for each vertex\&. 
+.br
+\fItriangles\fP The set of triangles, each represented as a set of three vertex indices\&. 
+.RE
+.PP
+
+.SH "Member Function Documentation"
+.PP 
+.SS "void Isotopy::Graph::calculate_regions ()"
+
+.PP
+Calculates the regions of the graph based on component antipode adjacency\&. Assigns each component to a region by traversing antipodal connections, grouping components that are connected via antipodes into the same region\&. Also builds the region adjacency structure and determines the root region\&.
+
+.PP
+This function must be called after the isotopy root has been computed\&. 
+.SS "void Isotopy::Graph::connected_components ()"
+
+.PP
+Computes the connected components of the graph\&. Populates the component-related member variables, assigning each vertex to a component\&. Updates the component adjacency information\&. 
+.SS "int Isotopy::Graph::even_regions ()\fR [inline]\fP"
+
+.PP
+Returns the number of even regions in the isotopy decomposition\&. 
+.PP
+\fBReturns\fP
+.RS 4
+The count of even regions\&. 
+.RE
+.PP
+
+.SS "bool Isotopy::Graph::is_mcurve ()\fR [inline]\fP"
+
+.PP
+Checks if the graph represents an M-curve\&. An M-curve is characterized by having the maximal possible number of regions for the given degree\&.
+
+.PP
+\fBReturns\fP
+.RS 4
+True if the graph is an M-curve, false otherwise\&. 
+.RE
+.PP
+
+.SS "int Isotopy::Graph::isotopy_root ()"
+
+.PP
+Computes the isotopy root of the graph\&. This is the core function of the library\&. It iteratively merges side points and their antipodes according to the isotopy rules, updating neighbor and component information until a root is found or a maximum number of iterations is reached\&.
+
+.PP
+The isotopy root is defined as the component containing a side point that is connected to its antipode, indicating that the isotopy process has merged all relevant regions\&.
+
+.PP
+\fBReturns\fP
+.RS 4
+The component index of the isotopy root if found, or -1 if no root is found after the maximum iterations\&. 
+.RE
+.PP
+
+.SS "void Isotopy::Graph::isotopy_type ()"
+
+.PP
+Computes the full isotopy type of the graph\&. This is the recommended entry point for users\&. It performs all necessary steps to analyze the graph's isotopy type, including computing connected components, finding the isotopy root, calculating regions, and assigning region signs\&. After calling this function, all relevant isotopy invariants and structures are available for further queries\&.
+
+.PP
+\fBExceptions\fP
+.RS 4
+\fIstd::runtime_error\fP if no isotopy root is found\&. 
+.RE
+.PP
+
+.SS "int Isotopy::Graph::odd_regions ()\fR [inline]\fP"
+
+.PP
+Returns the number of odd regions in the isotopy decomposition\&. 
+.PP
+\fBReturns\fP
+.RS 4
+The count of odd regions\&. 
+.RE
+.PP
+
+.SS "void Isotopy::Graph::pre_isotopy_root ()"
+
+.PP
+Prepares neighbor sets for isotopy root computation\&. For each side point, computes the set of other side points it is connected to via its component\&. Populates the \fRnbs\fP member with this neighbor information\&. 
+.SS "std::string Isotopy::Graph::viro_notation (bool unicode = \fRfalse\fP)"
+
+.PP
+Returns the Viro notation for the isotopy type of the graph\&. Generates a string representation (Viro notation) of the isotopy type, using the computed regions and their adjacencies\&. Optionally outputs Unicode symbols for delimiters and separators\&.
+
+.PP
+\fBParameters\fP
+.RS 4
+\fIunicode\fP If true, use Unicode symbols; otherwise, use ASCII\&. 
+.RE
+.PP
+\fBReturns\fP
+.RS 4
+The Viro notation string for the isotopy type\&. 
+.RE
+.PP
+
+
+.SH "Author"
+.PP 
+Generated automatically by Doxygen for libisotopy from the source code\&.
