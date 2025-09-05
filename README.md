@@ -51,7 +51,10 @@ make clean
 ```cpp
    #include "isotopy_graph.h"
    int main() {
-       Isotopy::Graph g(3, {true, false, true}, {{0,1},{1,2}});
+       int delta = 2;
+       std::vector<bool> sign = {true, true, true, true, true, true};
+       std::set<std::pair<int, int>> edges = {{0, 1}, {1, 2}, {0, 3}, {3, 4}, {2, 4}, {1,3}, {1,4}, {4,5}, {3,5}};
+       Isotopy::Graph g(delta, sign, edges);
        g.isotopy_type();
        std::string notation = g.viro_notation();
        int even = g.even_regions();
