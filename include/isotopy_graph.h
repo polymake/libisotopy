@@ -174,5 +174,20 @@ struct Graph {
  * @return The Viro notation string.
  */
 std::string viro_notation(int root_region, const std::vector<std::set<int>>& region_adjacency, bool unicode = false);
+}
+
+namespace Utils {
+
+  std::vector<std::vector<int>>  adjacency_matrix(int delta, const std::set<std::pair<int, int>>& edges);
+
+  std::string shorthand(int delta, std::vector<bool> sign_vector, std::set<std::pair<int, int>> edges);
+  std::string shorthand(int delta, std::vector<bool> sign_vector, std::set<std::set<int>> triangles);
+    
+  std::tuple<int, std::vector<bool>, std::set<std::pair<int, int>>> parse_shorthand(const std::string& shorthand);
+  
+  //std::string pm_string(int delta, const std::vector<bool>& sign_vector, const std::set<std::pair<int, int>>& edges);
+  //std::string pm_string(int delta, const std::vector<bool>& sign_vector, const std::set<std::set<int>>& triangles);
+
+  //std::tuple<int, std::vector<bool>, std::set<std::pair<int, int>>> parse_pm_string(const std::string& pm_string);
 
 }

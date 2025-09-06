@@ -6,6 +6,9 @@
 #include <unordered_map>
 #include <functional>
 
+//For the Utils
+#include <cstdint>
+
 namespace Isotopy {
 
 Graph::Graph(int delta, const std::vector<bool>&sign_vector, const std::set<std::set<int>>& triangles) {
@@ -496,5 +499,115 @@ std::string viro_notation(int root_region, const std::vector<std::set<int>>& reg
   std::set<int> visited;
   return dfs(root_region, visited);
 }
+}
+
+namespace Utils {
+
+std::vector<std::vector<int>>  adjacency_matrix(int delta, const std::set<std::pair<int, int>>& edges) {
+  size_t n = (delta + 1) * (delta + 2) / 2;
+  std::vector<std::vector<int>> matrix(n, std::vector<int>(n, 0));
+
+  for (const auto& edge : edges) {
+    int u = edge.first;
+    int v = edge.second;
+    if (u < 0 || u >= static_cast<int>(n) || v < 0 || v >= static_cast<int>(n)) {
+      throw std::out_of_range("Edge vertex index out of range");
+    }
+    matrix[u][v] = 1;
+    matrix[v][u] = 1; // Undirected graph
+  }
+  return matrix;
+}
+
+std::string to_graph6(const std::vector<std::vector<int>>& adjacency_matrix) {
+  int n = adjacency_matrix.size();
+  // Use std::vector<uint8_t> for better cache locality and bitwise ops
+  std::vector<uint8_t> edge_bits;
+  edge_bits.reserve(n * (n - 1) / 2);
+  for (int i = 0; i < n; ++i) {
+    for (int j = i + 1; j < n; ++j) {
+      edge_bits.push_back(adjacency_matrix[i][j] == 1 ? 1 : 0);
+    }
+  }
+  // Pad right so the length is a multiple of 6
+  int padding = (6 - edge_bits.size() % 6) % 6;
+  edge_bits.insert(edge_bits.end(), padding, 0);
+
+  std::string graph6;
+  for (size_t i = 0; i < edge_bits.size(); i += 6) {
+    uint8_t value = 0;
+    for (int j = 0; j < 6; ++j) {
+      value = (value << 1) | edge_bits[i + j];
+    }
+    graph6 += static_cast<char>(value + 63);
+  }
+  return graph6;
+}
+
+  
+std::string shorthand(int delta, std::vector<bool> sign_vector, std::set<std::pair<int, int>> edges) {
+  // int nedges =  3*delta+3/2 * (delta*delta-delta); // Unused
+  // int nfaces = delta*delta; // Unused
+
+  int nverts = (delta + 1) * (delta + 2) / 2; // Number of vertices in the triangulation
+  int length_of_adjacency = (nverts * (nverts - 1)) / 2; // Number of edges in a complete graph
+  int alt_padding = (6 - length_of_adjacency % 6) % 6; // Pad to multiple of 6
+  int length_of_graph6 = (length_of_adjacency + alt_padding) / 6;
+  int padding_sign_str = (6 - nverts % 6) % 6; // Pad to multiple of 6
+  int length_of_sign_str = (nverts + padding_sign_str) / 6;
+
+  auto adj_matrix = adjacency_matrix(delta, edges);
+
+  //Convert the sign string.
+  size_t padding = (6 - sign_vector.size() % 6) % 6;
+  std::vector<bool> sign_vector_padded(sign_vector.size() + padding, 0);
+  if (static_cast<size_t>(length_of_sign_str) != (sign_vector_padded.size() / 6)) {
+    std::cerr << "Error: Length of sign string does not match expected length." << std::endl;
+    return std::string();
+  }
+  for (size_t i = 0; i < sign_vector.size(); ++i) {
+    sign_vector_padded[i] = sign_vector[i];
+  }
+  std::string sign_short;
+  for (size_t i = 0; i < sign_vector_padded.size(); i += 6) {
+    uint8_t value = 0;
+    for (int j = 0; j < 6; ++j) {
+      value = (value << 1) | sign_vector_padded[i + j];
+    }
+    sign_short += static_cast<char>(value + 63);
+  }
+
+  std::string g6 = to_graph6(adj_matrix);
+
+  //As the leading character we have the delta+63 as ascii
+  std::string shorthand_string = std::string(1, static_cast<char>(delta + 63)) + g6 + sign_short;
+  if (shorthand_string.length() != static_cast<std::string::size_type>(1 + length_of_graph6 + length_of_sign_str)) {
+    std::cerr << "Error: Shorthand string length does not match expected length." << std::endl;
+  }
+
+  return shorthand_string;
 
 }
+
+
+std::string shorthand(int delta, std::vector<bool> sign_vector, std::set<std::set<int>> triangles) {
+  std::set<std::pair<int, int>> edges;
+  for (const auto& triangle : triangles) {
+    if (triangle.size() != 3) {
+      throw std::invalid_argument("Each triangle must have exactly 3 vertices.");
+    }
+    std::vector<int> verts(triangle.begin(), triangle.end());
+    edges.insert({verts[0], verts[1]});
+    edges.insert({verts[1], verts[2]});
+    edges.insert({verts[2], verts[0]});
+  }
+  return shorthand(delta, sign_vector, edges);
+}
+
+/*
+std::tuple<int, std::vector<bool>, std::set<std::pair<int, int>>> parse_shorthand(const std::string& shorthand) {
+
+}
+*/
+}
+

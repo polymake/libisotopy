@@ -68,6 +68,19 @@ void graph_debug(const Isotopy::Graph& graph) {
         std::cout << "\nPositive Regions: " << graph.p_regions << "\n";
         std::cout << "Negative Regions: " << graph.n_regions << "\n";
     }
+    if (graph.root_region != -1) {
+        std::cout << "Root Region: " << graph.root_region << "\n";
+    }
+    if (graph.region_adjacency.size() > 0) {
+        std::cout << "\nRegion Adjacency:\n";
+        for (size_t i = 0; i < graph.region_adjacency.size(); ++i) {
+            std::cout << "Region " << i << ": ";
+            for (int adj : graph.region_adjacency[i]) {
+                std::cout << adj << " ";
+            }
+            std::cout << "\n";
+        }
+    }
 }
 
 TEST_CASE("Isotopy::Graph basic properties", "[isotopy_graph]") {
@@ -140,6 +153,10 @@ TEST_CASE("Isotopy::Graph basic properties", "[isotopy_graph]") {
     SECTION("Viro notation") {
         auto viro = graph.viro_notation();
         REQUIRE(viro == "<1>");
+    }
+    SECTION("shorthand") {
+        auto shorthand = Utils::shorthand(delta, sign, edges);
+        REQUIRE(shorthand == "Ahqw~");
     }
 
 }
@@ -221,3 +238,16 @@ TEST_CASE("Isotopy::Graph Test Case 1202044", "[isotopy_graph]") {
     REQUIRE(graph.n_regions == expected_n);
 
 }
+
+TEST_CASE("Isotopy::Graph Sebastian's example", "[isotopy_graph]") {
+    int delta = 6;
+    std::vector<bool> sign {0,0,1,0,1,0,1,0,0,1,1,1,1,1,1,0,0,1,0,1,0,1,1,1,1,0,1,1};
+    std::set<std::set<int>> triangles {{5,6,12},{5,11,12},{4,5,11},{11,12,17},{4,10,11},{11,16,17},{3,4,10},{10,11,16},{16,17,21},{2,3,10},{2,9,10},{9,10,16},{1,2,9},{9,16,21},{1,9,21},{1,15,21},{1,8,15},{1,7,8},{7,8,15},{0,1,7},{7,15,21},{7,14,21},{14,20,21},{14,19,20},{7,13,14},{13,14,19},{20,21,24},{20,23,24},{19,20,23},{23,24,26},{13,18,19},{19,22,23},{18,19,22},{23,25,26},{22,23,25},{25,26,27}};
+    Isotopy::Graph graph(delta, sign, triangles);
+    graph.isotopy_type();
+    std::cout << "P regions: " << graph.p_regions << ", N regions: " << graph.n_regions << std::endl;
+    std::cout << "Viro notation: " << graph.viro_notation() << std::endl;
+    //std::cout << "Shorthand: " << Utils::shorthand(delta, sign, triangles) << std::endl;
+    graph_debug(graph);
+}
+
