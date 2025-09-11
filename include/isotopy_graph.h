@@ -178,12 +178,15 @@ std::string viro_notation(int root_region, const std::vector<std::set<int>>& reg
 
 namespace Utils {
 
-  std::vector<std::vector<int>>  adjacency_matrix(int delta, const std::set<std::pair<int, int>>& edges);
+  std::vector<std::vector<int>>  adjacency_matrix(int delta, const std::set<std::pair<int, int>>& edges, bool web_format = false);
 
   std::string shorthand(int delta, std::vector<bool> sign_vector, std::set<std::pair<int, int>> edges);
   std::string shorthand(int delta, std::vector<bool> sign_vector, std::set<std::set<int>> triangles);
     
   std::tuple<int, std::vector<bool>, std::set<std::pair<int, int>>> parse_shorthand(const std::string& shorthand);
+
+  std::string web_shorthand(int delta, std::vector<bool> sign_vector, std::set<std::pair<int, int>> edges);
+  std::string web_shorthand(int delta, std::vector<bool> sign_vector, std::set<std::set<int>> triangles);
   
   //std::string pm_string(int delta, const std::vector<bool>& sign_vector, const std::set<std::pair<int, int>>& edges);
   //std::string pm_string(int delta, const std::vector<bool>& sign_vector, const std::set<std::set<int>>& triangles);
