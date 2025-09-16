@@ -12,4 +12,4 @@ test:
     - make CFLAGS="--coverage" CXXFLAGS="--coverage" LDFLAGS="--coverage"
     - make test
     - gcovr --print-summary
-  coverage: 'TOTAL +\d+ +\d+ +(\d+\.\d+)%'
+  coverage: /^TOTAL.*\s+(\d+\%)$/
