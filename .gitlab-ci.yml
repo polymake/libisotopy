@@ -1,0 +1,14 @@
+stages:
+  - test
+
+test_full:
+  stage: test
+  image: gcc:latest
+  before_script:
+    - apt-get update && apt-get install -y make g++ wget
+    - wget https://github.com/catchorg/Catch2/releases/download/v2.13.10/catch.hpp -O tests/catch.hpp
+  script:
+    - make clean
+    - make
+    - make test_full
+
