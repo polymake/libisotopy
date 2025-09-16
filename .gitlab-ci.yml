@@ -1,13 +1,15 @@
 stages:
   - test
 
-test_full:
+test:
   stage: test
   image: gcc:latest
   before_script:
-    - apt-get update && apt-get install -y make g++ wget
+    - apt-get update && apt-get install -y make g++ wget python3-pip
+    - pip3 install gcovr
   script:
     - make clean
-    - make
+    - make CFLAGS="--coverage" CXXFLAGS="--coverage" LDFLAGS="--coverage"
     - make test
-
+    - gcovr --print-summary
+  coverage: 'TOTAL\s+\d+\s+\d+\s+(\d+\.\d+)%'
