@@ -22,10 +22,10 @@ $(TEST_BIN): $(TARGET) $(TEST_OBJ)
 
 TEST_BATCH_SRC = tests/isotopy_graph_batch.cpp
 TEST_BATCH_OBJ = $(TEST_BATCH_SRC:.cpp=.o)
-TEST_FULL_BIN = isotopy_graph
+TEST_FULL_BIN = isotopy_graph_full
 
 test_full: $(TEST_FULL_BIN)
-	./$(TEST_FULL_BIN) --reporter test_start
+	./$(TEST_FULL_BIN)
 
 $(TEST_FULL_BIN): $(TARGET) $(TEST_OBJ) $(TEST_BATCH_OBJ)
 	$(CXX) -o $@ $^ -L. -Wl,-rpath,\$$ORIGIN -lisotopy

@@ -11,6 +11,7 @@
 #include <regex>
 
 void graph_debug(const Isotopy::Graph& graph) {
+
     std::cout << "Adjacency List:\n";
     for (size_t i = 0; i < graph.adjacency.size(); ++i) {
         std::cout << i << ": ";
@@ -260,6 +261,7 @@ TEST_CASE("Isotopy::Graph Test Case 1202044", "[isotopy_graph]") {
 }
 
 TEST_CASE("Isotopy::Graph Sebastian's example", "[isotopy_graph]") {
+
     int delta = 6;
     std::vector<bool> sign {0,0,1,0,1,0,1,0,0,1,1,1,1,1,1,0,0,1,0,1,0,1,1,1,1,0,1,1};
     std::set<std::set<int>> triangles {{5,6,12},{5,11,12},{4,5,11},{11,12,17},{4,10,11},{11,16,17},{3,4,10},{10,11,16},{16,17,21},{2,3,10},{2,9,10},{9,10,16},{1,2,9},{9,16,21},{1,9,21},{1,15,21},{1,8,15},{1,7,8},{7,8,15},{0,1,7},{7,15,21},{7,14,21},{14,20,21},{14,19,20},{7,13,14},{13,14,19},{20,21,24},{20,23,24},{19,20,23},{23,24,26},{13,18,19},{19,22,23},{18,19,22},{23,25,26},{22,23,25},{25,26,27}};
@@ -281,4 +283,5 @@ TEST_CASE("Isotopy::Graph 14679", "[isotopy_graph]") {
     REQUIRE(graph.odd_regions() == 15);
     //std::cout << "Shorthand: " << Utils::web_shorthand(delta, sign, triangles) << std::endl;
 }
+
 
