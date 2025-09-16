@@ -51,7 +51,7 @@ void graph_debug(const Isotopy::Graph& graph) {
     if (!graph.nbs.empty()) {
         std::cout << "\nNBS:\n";
         for (size_t i = 0; i < graph.nbs.size(); ++i) {
-            std::cout << "Side point " << graph.side_points[i] << ": ";
+            std::cout << "Side point "<< i<< " is point: " << graph.side_points[i] << ": ";
             for (int nb : graph.nbs[i]) {
                 std::cout << nb << " ";
             }
@@ -76,6 +76,19 @@ void graph_debug(const Isotopy::Graph& graph) {
     }
     if (graph.root_region != -1) {
         std::cout << "Root Region: " << graph.root_region << "\n";
+    }
+    if (graph.region.size() > 0 && graph.component.size() > 0) {
+        std::cout << "\nRegions:\n";
+        for (size_t i = 0; i < graph.region.size(); ++i) {
+            std::cout << "Region " << i << ": ";
+            for (size_t vert = 0; vert < graph.component.size(); ++vert) {
+                int comp = graph.component[vert];
+                if (graph.region[comp] == static_cast<int>(i)) {
+                    std::cout << vert << " ";
+                }
+            }
+            std::cout << "\n";
+        }
     }
     if (graph.region_adjacency.size() > 0) {
         std::cout << "\nRegion Adjacency:\n";
@@ -168,6 +181,7 @@ TEST_CASE("Isotopy::Graph basic properties", "[isotopy_graph]") {
 }
 
 TEST_CASE("Isotopy::Graph from triangulation ", "[isotopy_graph]") {
+    
     int delta = 8;
     std::vector<bool> sign {0,1,0,0,0,1,0,0,1,1,1,0,0,0,1,0,1,1,0,0,1,1,1,1,0,1,0,0,1,0,0,1,0,1,1,0,0,1,0,1,1,0,0,0,1};
     std::set<std::set<int>> triangles {{0,9,10},{0,1,10},{9,10,17},{1,2,10},{10,17,18},{2,10,11},{10,18,19},{10,11,19},{17,18,25},{2,11,12},{18,19,25},{11,12,19},{17,24,25},{2,3,12},{24,25,30},{19,25,26},{12,19,20},{3,4,12},{19,26,27},{19,20,27},{25,26,32},{12,20,21},{25,30,31},{4,12,13},{25,31,32},{26,27,32},{20,21,27},{12,13,21},{30,31,36},{4,13,14},{31,32,36},{13,14,21},{27,32,33},{21,27,28},{30,35,36},{4,5,14},{27,33,34},{27,28,34},{32,36,37},{32,33,38},{21,28,29},{14,21,22},{35,36,39},{32,37,38},{21,22,29},{5,6,14},{33,34,38},{28,29,34},{36,37,41},{14,22,23},{37,38,41},{22,23,29},{36,39,40},{6,14,15},{36,40,41},{14,15,23},{39,40,43},{6,15,16},{40,41,43},{15,16,23},{39,42,43},{6,7,16},{42,43,44},{7,8,16}};
@@ -253,6 +267,18 @@ TEST_CASE("Isotopy::Graph Sebastian's example", "[isotopy_graph]") {
     graph.isotopy_type();
     REQUIRE(graph.p_regions == 1);
     REQUIRE(graph.n_regions == 9);
+    //std::cout << "Shorthand: " << Utils::web_shorthand(delta, sign, triangles) << std::endl;
+}
+TEST_CASE("Isotopy::Graph 14679", "[isotopy_graph]") {
+
+    int delta = 8;
+    std::vector<bool> sign {1,1,0,0,0,0,0,1,1,1,0,0,0,0,0,0,1,0,0,0,0,1,1,0,0,1,1,1,1,0,1,1,0,0,1,1,1,1,0,1,0,0,1,0,1};
+    std::set<std::set<int>> triangles {{8,15,16},{7,8,15},{15,16,23},{6,7,15},{6,14,28},{6,15,22},{15,22,34},{5,21,27},{15,23,29},{5,21,28},{5,6,14},{22,28,34},{5,14,28},{6,22,28},{3,4,13},{15,29,34},{27,28,31},{19,20,27},{4,5,13},{5,13,27},{28,34,38},{12,13,17},{28,32,33},{2,3,13},{28,33,38},{13,20,27},{13,19,20},{26,27,31},{18,19,27},{21,27,28},{2,11,12},{32,33,37},{13,18,19},{33,37,38},{2,12,13},{25,26,31},{28,31,32},{37,38,40},{11,12,17},{32,36,42},{17,26,27},{17,18,27},{31,32,35},{2,10,11},{38,41,42},{10,11,17},{32,37,40},{17,24,31},{17,25,31},{32,35,36},{1,2,9},{38,40,42},{13,17,18},{24,30,31},{30,31,35},{36,39,42},{17,25,26},{35,36,39},{0,1,9},{41,42,43},{9,10,17},{32,40,42},{2,9,10},{42,43,44}};
+
+    Isotopy::Graph graph(delta, sign, triangles);
+    graph.isotopy_type();
+    REQUIRE(graph.even_regions() == 2);
+    REQUIRE(graph.odd_regions() == 15);
     //std::cout << "Shorthand: " << Utils::web_shorthand(delta, sign, triangles) << std::endl;
 }
 
