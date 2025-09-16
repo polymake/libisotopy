@@ -9,4 +9,4 @@ test_full:
   script:
     - make clean
     - make
-    - make test
+    - make test_full
