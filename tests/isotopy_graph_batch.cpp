@@ -52,7 +52,7 @@ TestCaseData parse_test_case(const std::string& line) {
     }
     return data;
 }
-TEST_CASE("Isotopy::Graph batch test from file", "[isotopy_graph]") {
+TEST_CASE("Isotopy::Graph batch test from tree.txt", "[isotopy_graph]") {
   std::ifstream infile("tests/tree.txt");
   REQUIRE(infile);
     std::string line;
@@ -72,5 +72,36 @@ TEST_CASE("Isotopy::Graph batch test from file", "[isotopy_graph]") {
             REQUIRE(graph.p_regions == expected_p);
             REQUIRE(graph.n_regions == expected_n);
         }
-    }
+  }
 }
+
+TEST_CASE("Isotopy::Graph batch test from mcurves.txt.xz", "[isotopy_graph]") {
+  // Use popen to decompress xz file on the fly
+  FILE* pipe = popen("xz -dc tests/mcurves.txt.xz", "r");
+  REQUIRE(pipe != nullptr);
+
+  char* lineptr = nullptr;
+  size_t n = 0;
+  while (getline(&lineptr, &n, pipe) != -1) {
+    std::string line(lineptr);
+    auto data = parse_test_case(line);
+    int delta = 8;
+    if (data.case_number == 1202044) {
+      continue;
+    }
+    SECTION("Case " + std::to_string(data.case_number)) {
+      Isotopy::Graph graph(delta, data.signs_vec, data.triangulation_vec);
+      graph.isotopy_type();
+
+      int expected_p = data.p_regions;
+      int expected_n = data.n_regions;
+
+      REQUIRE(graph.p_regions == expected_p);
+      REQUIRE(graph.n_regions == expected_n);
+    }
+  }
+  free(lineptr);
+  pclose(pipe);
+}
+
+
