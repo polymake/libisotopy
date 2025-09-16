@@ -4,7 +4,6 @@
 *.exe
 isotopy_graph
 debug
-/tests/catch.hpp
 
 # Editor/OS files
 *.swp
