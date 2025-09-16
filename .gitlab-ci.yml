@@ -8,7 +8,6 @@ test:
     - apt-get update && apt-get install -y make g++ 
   script:
     - make clean
-    - make CFLAGS="--coverage" CXXFLAGS="--coverage" LDFLAGS="--coverage"
-    - make test
+    - make test CFLAGS="--coverage" CXXFLAGS="--coverage" LDFLAGS="--coverage"
     - gcovr --print-summary
   coverage: /^TOTAL.*\s+(\d+\%)$/
