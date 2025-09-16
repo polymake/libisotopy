@@ -9,6 +9,11 @@
 
 #include <regex>
 
+#include <cstdio>
+#include <string>
+#include <string_view>
+
+
 
 struct TestCaseData {
     int p_regions;

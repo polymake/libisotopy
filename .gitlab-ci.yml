@@ -9,5 +9,5 @@ test_full:
   script:
     - make clean
     - make
-    - make test_full
+    - make test
 
