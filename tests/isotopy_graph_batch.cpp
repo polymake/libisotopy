@@ -8,10 +8,10 @@
 #include <sstream>
 
 #include <regex>
-
 #include <cstdio>
 #include <string>
 #include <string_view>
+#include <iostream>
 
 
 
@@ -58,55 +58,67 @@ TestCaseData parse_test_case(const std::string& line) {
     return data;
 }
 TEST_CASE("Isotopy::Graph batch test from tree.txt", "[isotopy_graph]") {
+  std::cout << "Reading test cases from file tree.txt\n";
   std::ifstream infile("tests/tree.txt");
   REQUIRE(infile);
-    std::string line;
-    while (std::getline(infile, line)) {
-        auto data = parse_test_case(line);
-        int delta = 8;
-        if (data.case_number == 1202044) {
-          continue;
-        }
-        SECTION("Case " + std::to_string(data.case_number)) {
-            Isotopy::Graph graph(delta, data.signs_vec, data.triangulation_vec);
-            graph.isotopy_type();
+  // Count total lines
+  std::istreambuf_iterator<char> begin(infile), end;
+  int total_lines = std::count(begin, end, '\n');
+  infile.clear();
+  infile.seekg(0, std::ios::beg);
+  int line_count = 0;
+  std::string line;
 
-            int expected_p = data.p_regions;
-            int expected_n = data.n_regions;
+  while (std::getline(infile, line)) {
+      ++line_count;
+      auto data = parse_test_case(line);
+      int delta = 8;
+      if (line_count % 500 == 0 || line_count == total_lines) {
+        std::cout << "Processed " << line_count << " / " << total_lines << " test cases from tree.txt\n";
+      }
+    Isotopy::Graph graph(delta, data.signs_vec, data.triangulation_vec);
+    graph.isotopy_type();
 
-            REQUIRE(graph.p_regions == expected_p);
-            REQUIRE(graph.n_regions == expected_n);
-        }
+    int expected_p = data.p_regions;
+    int expected_n = data.n_regions;
+
+    REQUIRE(graph.p_regions == expected_p);
+    REQUIRE(graph.n_regions == expected_n);
   }
 }
-
 TEST_CASE("Isotopy::Graph batch test from mcurves.txt.xz", "[isotopy_graph]") {
-  // Use popen to decompress xz file on the fly
+  std::cout << "Reading test cases from compressed file mcurves.txt.xz\n";
   FILE* pipe = popen("xz -dc tests/mcurves.txt.xz", "r");
   REQUIRE(pipe != nullptr);
 
-  char* lineptr = nullptr;
-  size_t n = 0;
-  while (getline(&lineptr, &n, pipe) != -1) {
-    std::string line(lineptr);
+  // Count total lines
+  FILE* count_pipe = popen("xz -dc tests/mcurves.txt.xz | wc -l", "r");
+  int total_lines = 0;
+  fscanf(count_pipe, "%d", &total_lines);
+  pclose(count_pipe);
+
+  int line_count = 0;
+  char buffer[4096];
+  while (fgets(buffer, sizeof(buffer), pipe)) {
+    ++line_count;
+    std::string line(buffer);
     auto data = parse_test_case(line);
     int delta = 8;
     if (data.case_number == 1202044) {
       continue;
     }
-    SECTION("Case " + std::to_string(data.case_number)) {
-      Isotopy::Graph graph(delta, data.signs_vec, data.triangulation_vec);
-      graph.isotopy_type();
-
-      int expected_p = data.p_regions;
-      int expected_n = data.n_regions;
-
-      REQUIRE(graph.p_regions == expected_p);
-      REQUIRE(graph.n_regions == expected_n);
+    if (line_count % 500 == 0 || line_count == total_lines) {
+      std::cout << "Processed " << line_count << " / " << total_lines << " test cases from mcurves.txt.xz\n";
     }
+    Isotopy::Graph graph(delta, data.signs_vec, data.triangulation_vec);
+    graph.isotopy_type();
+
+    int expected_p = data.p_regions;
+    int expected_n = data.n_regions;
+
+    REQUIRE(graph.p_regions == expected_p);
+    REQUIRE(graph.n_regions == expected_n);
   }
-  free(lineptr);
   pclose(pipe);
 }
-
 

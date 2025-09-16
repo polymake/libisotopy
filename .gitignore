@@ -3,6 +3,7 @@
 *.so
 *.exe
 isotopy_graph
+isotopy_graph_full
 debug
 
 # Editor/OS files
