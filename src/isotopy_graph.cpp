@@ -265,6 +265,8 @@ int Graph::isotopy_root() {
       return root;
     }
 
+
+
     //Check if the sidepoint is connected to antipodel sides, aka sides 0 and 2 or sides 1 and 3
     if ((sides_copy[i][0] && sides_copy[i][2]) || (sides_copy[i][1] && sides_copy[i][3]))  continue; // Do nothing
 
@@ -284,20 +286,12 @@ int Graph::isotopy_root() {
       //NOTE: I believe this is not an issue since it will just merge the opposite side points.
       is_connected = false;
     }
-    /*
-    if (i < 5) {
-      std::cout << "Iteration: " << iter << "\n";
-      std::cout << "i: " << i << " nbs: ";
-      for (int nb : nbs_copy[i]) {
-        std::cout << nb << " ";
-      }
-      std::cout << " is_connected: " << is_connected << "\n";
-    }
-    */
 
     if (!is_connected) continue; // Do nothing 
+    
 
     int j = ((i+N)-1) % N;
+
     //merge the nbs of i and j
     std::set<int> merged_nbs;
     merged_nbs.insert(nbs_copy[i].begin(), nbs_copy[i].end());
@@ -327,21 +321,33 @@ int Graph::isotopy_root() {
     }
 
     //Merge antipode_i with antipode_j
-    std::set<int> merged_nbs_anti;
-    merged_nbs_anti = nbs_copy[antipode_j];
-    merged_nbs_anti.insert(antipode_i);
-     //Update sides of antipode_j to include sides of antipode_i
-    std::vector<bool> new_sides_anti(4, false);
-
-    for (size_t k = 0; k < 4; ++k) {
-      new_sides_anti[k] = sides[antipode_i][k] || sides_copy[antipode_j][k];
+    int antipode_start = (min_idx - 1 + 2 * delta) % N;
+    int antipode_end = (max_idx + 1 + 2 * delta) % N;
+    std::set<int> antipode_range;
+    for (int i = min_idx; i <= max_idx; ++i) {
+      antipode_range.insert((i + 2 * delta) % N);
     }
 
-    component_copy[side_points[antipode_i]] = component_copy[side_points[antipode_j]];
+    std::set<int> merged_nbs_anti;
+    merged_nbs_anti = nbs_copy[antipode_start];
+    merged_nbs_anti.insert(nbs_copy[antipode_end].begin(), nbs_copy[antipode_end].end());
+    merged_nbs_anti.insert(antipode_range.begin(), antipode_range.end());
+    std::vector<bool> new_sides_anti(4, false);
+    
+    for (size_t k = 0; k < 4; ++k) {
+      new_sides_anti[k] = sides_copy[antipode_j][k];
+      for (int idx : antipode_range) {
+        new_sides_anti[k] = new_sides_anti[k] || sides_copy[idx][k];
+      }
+    }
+
+    //component_copy[side_points[antipode_i]] = component_copy[side_points[antipode_j]];
+    int new_component= component_copy[side_points[antipode_start]];
     
     for (int idx : merged_nbs_anti) {
       nbs_copy[idx] = merged_nbs_anti;
       sides_copy[idx] = new_sides_anti;
+      component_copy[side_points[idx]] = new_component;
     }
 
   }
