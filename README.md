@@ -1,5 +1,7 @@
 # libisotopy
 
+[![GitLab CI](https://git.zib.de/mwack/libisotopy/badges/main/pipeline.svg)](https://git.zib.de/mwack/libisotopy/pipelines)
+
 A C++ shared library for computing isotopy types of patchworks.
 
 **Warning:** While the core algorithm is tested, usage of this library in other projects is not. Use with caution and report any issues you encounter.
