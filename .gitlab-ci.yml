@@ -1,13 +1,12 @@
 stages:
   - test
 
-test:
+test_full:
   stage: test
   image: gcc:latest
   before_script:
-    - apt-get update && apt-get install -y make g++ 
+    - apt-get update && apt-get install -y make g++ wget
   script:
     - make clean
-    - make test CFLAGS="--coverage" CXXFLAGS="--coverage" LDFLAGS="--coverage"
-    - gcovr --print-summary
-  coverage: /^TOTAL.*\s+(\d+\%)$/
+    - make
+    - make test
