@@ -204,10 +204,9 @@ TEST_CASE("Isotopy::Graph Test Case 9", "[isotopy_graph]") {
     int expected_n = 1;
     graph.isotopy_type();
 
-
     REQUIRE(graph.p_regions == expected_p);
     REQUIRE(graph.n_regions == expected_n);
-
+    REQUIRE(graph.viro_notation() == "<3v1<1>>");
 
 }
 
@@ -225,6 +224,8 @@ TEST_CASE("Isotopy::Graph Test Case 34", "[isotopy_graph]") {
 
     REQUIRE(graph.p_regions == expected_p);
     REQUIRE(graph.n_regions == expected_n);
+
+    REQUIRE(graph.viro_notation() == "<2v1<2>>");
 }
 
 TEST_CASE("Isotopy::Graph Test Case 29", "[isotopy_graph]") {
@@ -240,6 +241,7 @@ TEST_CASE("Isotopy::Graph Test Case 29", "[isotopy_graph]") {
 
     REQUIRE(graph.even_regions() == expected_p);
     REQUIRE(graph.odd_regions() == expected_n);
+    REQUIRE(graph.viro_notation() == "<3v1<1>v1<2>>");
 
 }
 
@@ -257,6 +259,7 @@ TEST_CASE("Isotopy::Graph Test Case 1202044", "[isotopy_graph]") {
     //graph_debug(graph);
     REQUIRE(graph.p_regions == expected_p);
     REQUIRE(graph.n_regions == expected_n);
+    REQUIRE(graph.viro_notation() == "<8v1<6v1<3>>>");
 
 }
 
@@ -269,7 +272,7 @@ TEST_CASE("Isotopy::Graph Sebastian's example", "[isotopy_graph]") {
     graph.isotopy_type();
     REQUIRE(graph.p_regions == 1);
     REQUIRE(graph.n_regions == 9);
-    //std::cout << "Shorthand: " << Utils::web_shorthand(delta, sign, triangles) << std::endl;
+    REQUIRE(graph.viro_notation() == "<1<9>>");
 }
 TEST_CASE("Isotopy::Graph 14679", "[isotopy_graph]") {
 
@@ -281,6 +284,7 @@ TEST_CASE("Isotopy::Graph 14679", "[isotopy_graph]") {
     graph.isotopy_type();
     REQUIRE(graph.even_regions() == 2);
     REQUIRE(graph.odd_regions() == 15);
+    REQUIRE(graph.viro_notation() == "<1v1<15>>");
     //std::cout << "Shorthand: " << Utils::web_shorthand(delta, sign, triangles) << std::endl;
 }
 
