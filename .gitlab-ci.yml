@@ -10,3 +10,4 @@ test_full:
     - make clean
     - make
     - make test_full
+

@@ -6,7 +6,7 @@ TARGET = libisotopy.so
 
 TEST_SRC = tests/isotopy_graph.cpp
 TEST_OBJ = $(TEST_SRC:.cpp=.o)
-TEST_BIN = isotopy_graph
+TEST_BIN = isotopy_graph_test
 
 all: $(TARGET)
 
@@ -22,7 +22,7 @@ $(TEST_BIN): $(TARGET) $(TEST_OBJ)
 
 TEST_BATCH_SRC = tests/isotopy_graph_batch.cpp
 TEST_BATCH_OBJ = $(TEST_BATCH_SRC:.cpp=.o)
-TEST_FULL_BIN = isotopy_graph_full
+TEST_FULL_BIN = isotopy_graph_test_full
 
 test_full: $(TEST_FULL_BIN)
 	./$(TEST_FULL_BIN)
