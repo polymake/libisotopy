@@ -1,4 +1,5 @@
 #include "catch.hpp"
+#include "node.hpp"
 #include "isotopy_graph.h"
 #include <vector>
 #include <set>
@@ -86,6 +87,41 @@ TEST_CASE("Isotopy::Graph batch test from tree.txt", "[isotopy_graph]") {
     REQUIRE(graph.n_regions == expected_n);
   }
 }
+TEST_CASE("Isotopy::Graph batch test from YAML file", "[isotopy_graph][yaml]") {
+  std::ifstream ifs("tests/isotopy_tests.yaml");
+  std::string yaml((std::istreambuf_iterator<char>(ifs)), std::istreambuf_iterator<char>());
+  auto doc = fkyaml::node::deserialize(yaml);
+  int line_count = 0;
+  int total_lines = doc.size();
+
+  for (auto& node : doc) {
+    ++line_count;
+
+    if (line_count % 500 == 0 || line_count == total_lines) {
+      std::cout << "Processed " << line_count << " / " << total_lines << " test cases from isotopy_tests.yaml\n";
+    }
+    int delta = node.at("degree").get_value<int>();
+    std::vector<bool> signs_vec = node.at("polarisation").get_value<std::vector<bool>>();
+    std::set<std::set<int>> triangulation_vec = node.at("triangulation").get_value<std::set<std::set<int>>>();
+    int expected_p = node.at("even").get_value<int>(); 
+    int expected_n = node.at("odd").get_value<int>();
+    size_t nverts = (delta + 1) * (delta + 2) / 2;
+    if (signs_vec.size() != nverts) {
+      continue; // Skip invalid test case
+    }
+    std::string viro = node.at("viro").get_value<std::string>();
+
+    Isotopy::Graph graph(delta, signs_vec, triangulation_vec);
+    graph.isotopy_type();
+    REQUIRE(graph.even_regions() == expected_p);
+    REQUIRE(graph.odd_regions() == expected_n);
+    REQUIRE(graph.viro_notation() == viro);
+
+  }
+}
+
+
+
 TEST_CASE("Isotopy::Graph batch test from mcurves.txt.xz", "[isotopy_graph]") {
   std::cout << "Reading test cases from compressed file mcurves.txt.xz\n";
   FILE* pipe = popen("xz -dc tests/mcurves.txt.xz", "r");
