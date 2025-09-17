@@ -489,6 +489,7 @@ std::string viro_notation(int root_region, const std::vector<std::set<int>>& reg
         for (const auto& pair : count_type_pairs) {
           grouped_types.push_back(std::to_string(pair.first) + pair.second);
         }
+        std::sort(grouped_types.begin(), grouped_types.end());
         std::string result = open_delim;
         if (leaf_count > 0) {
           result += std::to_string(leaf_count) + sep;
