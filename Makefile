@@ -30,6 +30,26 @@ test_full: $(TEST_FULL_BIN)
 $(TEST_FULL_BIN): $(TARGET) $(TEST_OBJ) $(TEST_BATCH_OBJ)
 	$(CXX) -o $@ $^ -L. -Wl,-rpath,\$$ORIGIN -lisotopy
 
+BENCHMARK_SRC = tests/isotopy_graph_benchmark.cpp
+BENCHMARK_OBJ = $(BENCHMARK_SRC:.cpp=.o)
+BENCHMARK_BIN = isotopy_graph_benchmark
+
+benchmark: $(BENCHMARK_BIN)
+	./$(BENCHMARK_BIN)
+
+$(BENCHMARK_BIN): $(TARGET) $(BENCHMARK_OBJ)
+	$(CXX) -o $@ $^ -L. -Wl,-rpath,\$$ORIGIN -lisotopy
+
+PROFILING_SRC = tests/isotopy_graph_profiling.cpp
+PROFILING_OBJ = $(PROFILING_SRC:.cpp=.o)
+PROFILING_BIN = isotopy_graph_profiling
+
+profiling: $(PROFILING_BIN)
+	./$(PROFILING_BIN)
+
+$(PROFILING_BIN): $(TARGET) $(PROFILING_OBJ)
+	$(CXX) -o $@ $^ -L. -Wl,-rpath,\$$ORIGIN -lisotopy
+
 clean:
 	rm -f $(OBJ) $(TARGET) $(TEST_OBJ) $(TEST_BIN) $(TEST_BATCH_OBJ) $(TEST_FULL_BIN)
 

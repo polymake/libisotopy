@@ -2,8 +2,7 @@
 *.o
 *.so
 *.exe
-isotopy_graph_test
-isotopy_graph_test_full
+isotopy_graph*
 debug
 
 # Editor/OS files

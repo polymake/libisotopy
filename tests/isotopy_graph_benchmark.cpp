@@ -1,0 +1,136 @@
+#define CATCH_CONFIG_MAIN
+#define CATCH_CONFIG_ENABLE_BENCHMARKING
+#include "catch.hpp"
+#include "node.hpp"
+#include "isotopy_graph.h"
+
+#include <fstream>
+#include <string>
+#include <vector>
+#include <set>
+#include <algorithm>
+#include <chrono>
+#include <iostream>
+#include <functional>
+
+TEST_CASE("Benchmark Sebastian's example", "[isotopy_graph]") {
+  int delta = 6;
+  std::vector<bool> sign {0,0,1,0,1,0,1,0,0,1,1,1,1,1,1,0,0,1,0,1,0,1,1,1,1,0,1,1};
+  std::set<std::set<int>> triangles {{5,6,12},{5,11,12},{4,5,11},{11,12,17},{4,10,11},{11,16,17},{3,4,10},{10,11,16},{16,17,21},{2,3,10},{2,9,10},{9,10,16},{1,2,9},{9,16,21},{1,9,21},{1,15,21},{1,8,15},{1,7,8},{7,8,15},{0,1,7},{7,15,21},{7,14,21},{14,20,21},{14,19,20},{7,13,14},{13,14,19},{20,21,24},{20,23,24},{19,20,23},{23,24,26},{13,18,19},{19,22,23},{18,19,22},{23,25,26},{22,23,25},{25,26,27}};
+  BENCHMARK("constructor") {
+    return Isotopy::Graph(delta, sign, triangles);
+  };
+  Isotopy::Graph graph2(delta, sign, triangles);
+  BENCHMARK("isotopy_type") {
+    return graph2.isotopy_type();
+  };
+  Isotopy::Graph graph3(delta, sign, triangles);
+  graph3.isotopy_type();
+  BENCHMARK("viro_notation") {
+    return graph3.viro_notation();
+  };
+}
+
+TEST_CASE("Benchmark specific cases from YAML", "[isotopy_graph][yaml][specific]") {
+  std::ifstream ifs("tests/isotopy_tests.yaml");
+  std::string yaml((std::istreambuf_iterator<char>(ifs)), std::istreambuf_iterator<char>());
+  auto doc = fkyaml::node::deserialize(yaml);
+
+  std::vector<int> case_numbers = {1358, 1351};
+  for (int case_num : case_numbers) {
+    if (case_num - 1 < 0 || static_cast<size_t>(case_num - 1) >= doc.size()) continue;
+    auto& node = doc[case_num - 1];
+    int delta = node.at("degree").get_value<int>();
+    std::vector<bool> signs_vec = node.at("polarisation").get_value<std::vector<bool>>();
+    std::set<std::set<int>> triangulation_vec = node.at("triangulation").get_value<std::set<std::set<int>>>();
+
+    BENCHMARK_ADVANCED("constructor " + std::to_string(case_num))(Catch::Benchmark::Chronometer meter) {
+      meter.measure([&] { return Isotopy::Graph(delta, signs_vec, triangulation_vec); });
+    };
+
+
+    BENCHMARK_ADVANCED("isotopy_type " + std::to_string(case_num))(Catch::Benchmark::Chronometer meter) {
+      Isotopy::Graph graph(delta, signs_vec, triangulation_vec);
+      meter.measure([&] { return graph.isotopy_type(); });
+    };
+
+    BENCHMARK_ADVANCED("viro_notation " + std::to_string(case_num))(Catch::Benchmark::Chronometer meter) {
+      Isotopy::Graph graph(delta, signs_vec, triangulation_vec);
+      graph.isotopy_type();
+      meter.measure([&] { return graph.viro_notation(); });
+    };
+  }
+}
+
+
+
+
+/*
+TEST_CASE("Isotopy::Graph batch timing analysis from YAML file", "[isotopy_graph][yaml][timing]") {
+  std::ifstream ifs("tests/isotopy_tests.yaml");
+  std::string yaml((std::istreambuf_iterator<char>(ifs)), std::istreambuf_iterator<char>());
+  auto doc = fkyaml::node::deserialize(yaml);
+
+  // Store timings and case numbers
+  std::vector<std::pair<double, int>> timings(doc.size(), {0.0, 0});
+
+  int repeat_count = 50;
+  for (int rep = 0; rep < repeat_count; ++rep) {
+    int line_count = 0;
+    if (rep % 5 == 0) {
+      std::cout << "Starting repetition " << (rep + 1) << " of " << repeat_count << "\n";
+    }
+    for (auto& node : doc) {
+      ++line_count;
+
+      int delta = node.at("degree").get_value<int>();
+      std::vector<bool> signs_vec = node.at("polarisation").get_value<std::vector<bool>>();
+      std::set<std::set<int>> triangulation_vec = node.at("triangulation").get_value<std::set<std::set<int>>>();
+      size_t nverts = (delta + 1) * (delta + 2) / 2;
+      if (signs_vec.size() != nverts) {
+        continue; // Skip invalid test case
+      }
+
+      auto start = std::chrono::high_resolution_clock::now();
+      Isotopy::Graph graph(delta, signs_vec, triangulation_vec);
+      graph.isotopy_type();
+      graph.viro_notation();
+      auto end = std::chrono::high_resolution_clock::now();
+      double elapsed = std::chrono::duration<double, std::milli>(end - start).count();
+
+      // Accumulate timings by index
+      int idx = line_count - 1;
+      timings[idx].first += elapsed;
+      timings[idx].second = line_count;
+    }
+  }
+
+  // Compute average
+  for (auto& t : timings) {
+    t.first /= repeat_count;
+  }
+
+  // Sort timings descending and print the worst 10
+std::sort(timings.begin(), timings.end(), std::greater<std::pair<double, int>>());
+  std::cout << "Worst 10 cases (elapsed ms, case number):\n";
+  for (size_t i = 0; i < std::min<size_t>(10, timings.size()); ++i) {
+    std::cout << timings[i].first << " ms, case #" << timings[i].second << "\n";
+  }
+
+}
+*/
+
+
+
+/*
+0.283714 ms, case #1551
+0.283089 ms, case #1358
+0.282703 ms, case #1393
+0.281751 ms, case #1443
+0.281654 ms, case #1395
+0.281499 ms, case #1400
+0.281202 ms, case #1353
+0.280646 ms, case #1308
+0.2799 ms, case #1351
+0.279849 ms, case #1397
+*/
