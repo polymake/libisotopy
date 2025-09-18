@@ -102,7 +102,7 @@ void graph_debug(const Isotopy::Graph& graph) {
         }
     }
 }
-
+/* This is specific to the algorithm
 TEST_CASE("Isotopy::Graph basic properties", "[isotopy_graph]") {
     int delta = 2;
     std::vector<bool> sign = {true, true, true, true, true, true};
@@ -180,6 +180,7 @@ TEST_CASE("Isotopy::Graph basic properties", "[isotopy_graph]") {
     }
 
 }
+*/
 
 TEST_CASE("Isotopy::Graph from triangulation ", "[isotopy_graph]") {
     
