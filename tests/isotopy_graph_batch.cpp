@@ -83,6 +83,10 @@ TEST_CASE("Isotopy::Graph batch test from tree.txt", "[isotopy_graph]") {
     int expected_p = data.p_regions;
     int expected_n = data.n_regions;
 
+    if (graph.p_regions != expected_p || graph.n_regions != expected_n) {
+      std::cout << "Discrepancy in case " << data.case_number << ": Expected (P,N)=(" << expected_p << "," << expected_n << "), Got (P,N)=(" << graph.p_regions << "," << graph.n_regions << ")\n";
+    }
+
     REQUIRE(graph.p_regions == expected_p);
     REQUIRE(graph.n_regions == expected_n);
   }

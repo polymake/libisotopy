@@ -19,8 +19,6 @@ struct Graph {
     std::vector<std::set<int>> adjacency; ///< Adjacency list for the graph.
 
     std::vector<int> side_points; ///< Maps side point index to vertex index.
-    std::vector<std::vector<bool>> sides; ///< sides[i][j] is true if sidepoint i is on side j (0: top-right, 1: bottom-right, 2: bottom-left, 3: top-left).
-    std::vector<std::set<int>> nbs; ///< nbs[i] gives the set of other sidepoints connected to sidepoint i via its component.
 
     // Information about connected components
     int root = -1; ///< Root component index.
@@ -33,6 +31,11 @@ struct Graph {
     std::vector<bool> region_sign; ///< region_sign[r] gives the sign of region r (true for positive, false for negative).
 
     std::set<std::pair<int, int>> edges = std::set<std::pair<int, int>>(); ///< Edges of the tree representing the isotopy graph.
+
+    std::vector<int> side_points_complete;
+    std::vector<std::pair<int,int>> edges_complete;
+    std::vector<bool> sign_complete;
+    std::vector<std::vector<bool>> sides_complete;
 
     int p_regions = 0; ///< Number of even regions.
     int n_regions = -1; ///< Number of odd regions.
