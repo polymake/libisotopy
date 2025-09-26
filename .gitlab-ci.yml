@@ -24,20 +24,20 @@ speedtest:
       if [ "$CI_PIPELINE_SOURCE" = "merge_request_event" ]; then
         MR_BRANCH="$CI_COMMIT_REF_NAME"
         make clean && make && make benchmark | tee mr_benchmark.txt
-        MR_RESULT=$(grep '^Average:' mr_benchmark.txt | grep -o -m1 '[0-9]\+')
+        MR_RESULT=$(awk '/^Average:/ {for(i=2;i<=NF;i++) if($i ~ /^[0-9.]+$/) {print $i; exit}}' mr_benchmark.txt)
         git fetch origin master
         git checkout origin/master
         make clean && make && make benchmark | tee master_benchmark.txt
-        MASTER_RESULT=$(grep '^Average:' master_benchmark.txt | grep -o -m1 '[0-9]\+')
+        MASTER_RESULT=$(awk '/^Average:/ {for(i=2;i<=NF;i++) if($i ~ /^[0-9.]+$/) {print $i; exit}}' master_benchmark.txt)
         # Compare results (higher is better)
         echo "MR: $MR_RESULT, master: $MASTER_RESULT"
         awk -v mr="$MR_RESULT" -v master="$MASTER_RESULT" 'BEGIN { if (mr > master) exit 0; else exit 1 }'
       else
         # Manual run: compare branch to itself
         make clean && make && make benchmark | tee run1.txt
-        RESULT1=$(grep '^Average:' run1.txt | grep -o -m1 '[0-9]\+')
+        RESULT1=$(awk '/^Average:/ {for(i=2;i<=NF;i++) if($i ~ /^[0-9.]+$/) {print $i; exit}}' run1.txt)
         make clean && make && make benchmark | tee run2.txt
-        RESULT2=$(grep '^Average:' run2.txt | grep -o -m1 '[0-9]\+')
+        RESULT2=$(awk '/^Average:/ {for(i=2;i<=NF;i++) if($i ~ /^[0-9.]+$/) {print $i; exit}}' run2.txt)
         echo "Run1: $RESULT1, Run2: $RESULT2"
         awk -v r1="$RESULT1" -v r2="$RESULT2" 'BEGIN { if (r1 > r2) exit 0; else exit 0 }'
       fi
