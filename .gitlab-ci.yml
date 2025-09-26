@@ -33,11 +33,13 @@ speedtest:
         echo "MR: $MR_RESULT, master: $MASTER_RESULT"
         awk -v mr="$MR_RESULT" -v master="$MASTER_RESULT" 'BEGIN { if (mr > master) exit 0; else exit 1 }'
       else
-        # Manual run: compare branch to itself
-        make clean && make && make benchmark | tee run1.txt
-        RESULT1=$(awk '/^Average:/ {for(i=2;i<=NF;i++) if($i ~ /^[0-9.]+$/) {print $i; exit}}' run1.txt)
-        make clean && make && make benchmark | tee run2.txt
-        RESULT2=$(awk '/^Average:/ {for(i=2;i<=NF;i++) if($i ~ /^[0-9.]+$/) {print $i; exit}}' run2.txt)
-        echo "Run1: $RESULT1, Run2: $RESULT2"
-        awk -v r1="$RESULT1" -v r2="$RESULT2" 'BEGIN { if (r1 > r2) exit 0; else exit 0 }'
+        make clean && make && make benchmark | tee current_benchmark.txt
+        CURRENT_RESULT=$(awk '/^Average:/ {for(i=2;i<=NF;i++) if($i ~ /^[0-9.]+$/) {print $i; exit}}' current_benchmark.txt)
+        git fetch origin
+        PREV_COMMIT=$(git rev-parse HEAD^)
+        git checkout $PREV_COMMIT
+        make clean && make && make benchmark | tee prev_benchmark.txt
+        PREV_RESULT=$(awk '/^Average:/ {for(i=2;i<=NF;i++) if($i ~ /^[0-9.]+$/) {print $i; exit}}' prev_benchmark.txt)
+        echo "Current: $CURRENT_RESULT, Previous: $PREV_RESULT"
+        awk -v curr="$CURRENT_RESULT" -v prev="$PREV_RESULT" 'BEGIN { if (curr > prev) exit 0; else exit 0 }'
       fi

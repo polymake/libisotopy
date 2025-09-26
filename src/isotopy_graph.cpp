@@ -95,13 +95,6 @@ Graph::Graph(int delta, const std::vector<bool>&sign_vector, const std::set<std:
     ++index;
     }
   }
-  // Print adjacency list for each point using edges_complete
-  std::vector<std::vector<int>> adjacency_list(4 * nverts);
-  for (const auto& edge : edges_complete) {
-    if (sign_complete[edge.first] != sign_complete[edge.second]) { continue; }
-    adjacency_list[edge.first].push_back(edge.second);
-    adjacency_list[edge.second].push_back(edge.first); // assuming undirected edges
-  }
 }
 
 void Graph::connected_components() {
