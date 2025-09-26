@@ -16,7 +16,7 @@ speedtest:
   image: gcc:latest
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
-    - when: manual
+    - when: always
   before_script:
     - apt-get update && apt-get install -y make g++ wget git
   script:
