@@ -25,8 +25,11 @@ Graph::Graph(int delta, const std::vector<bool>&sign_vector, const std::set<std:
   *this = Graph(delta, sign_vector, edges);
 }
 
+Graph::Graph(int delta, const std::vector<bool>& sign_vector, const std::set<std::pair<int, int>>& edges)
+: Graph(delta, sign_vector, std::vector<std::pair<int, int>>(edges.begin(), edges.end())) {}
 
-Graph::Graph(int delta, const std::vector<bool>&sign_vector, const std::set<std::pair<int, int>>& edges)
+
+Graph::Graph(int delta, const std::vector<bool>&sign_vector, const std::vector<std::pair<int, int>>& edges)
 : delta(delta) {
   size_t nverts = (delta + 1) * (delta + 2) / 2;
   assert(sign_vector.size() == nverts && "sign vector length does not match number of vertices");

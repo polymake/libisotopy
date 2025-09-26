@@ -14,7 +14,7 @@ namespace Isotopy {
  * side points and edges or triangles, compute isotopy invariants, and generate Viro notation.
  */
 struct Graph {
-    int delta; ///< Number of side points (vertices).
+    int delta; ///< The degree of the patchwork.
     std::vector<bool> sign; ///< Sign vector with a boolean value for each vertex.
     std::vector<std::set<int>> adjacency; ///< Adjacency list for the graph.
 
@@ -51,16 +51,28 @@ struct Graph {
     /**
      * @brief Constructs a graph from a sign vector and a set of edges.
      *
-     * @param delta The number of vertices.
+     * @param delta The degree of the patchwork.
      * @param sign_vector The sign vector with a boolean value for each vertex.
      * @param edges The set of edges, each represented as a pair of vertex indices.
      */
     Graph(int delta, const std::vector<bool>& sign_vector, const std::set<std::pair<int, int>>& edges);
 
+
+    /**
+     * @brief Constructs a graph from a sign vector and a list of edges.
+     *
+     * @param delta The degree of the patchwork.
+     * @param sign_vector The sign vector with a boolean value for each vertex.
+     * @param edges The list of edges, each represented as a pair of vertex indices.
+     */
+    Graph(int delta, const std::vector<bool>& sign_vector, const std::vector<std::pair<int, int>>& edges);
+
+
+
     /**
      * @brief Constructs a graph from a sign vector and a set of triangles.
      *
-     * @param delta The number of vertices.
+     * @param delta defines the degree of the patchwork
      * @param sign_vector The sign vector with a boolean value for each vertex.
      * @param triangles The set of triangles, each represented as a set of three vertex indices.
      */
