@@ -318,30 +318,23 @@ std::string viro_notation(int root_region, const std::vector<std::set<int>>& reg
         return open_delim + "1" + dfs(non_leaf_children[0], visited) + close_delim;
       } else {
         std::vector<std::string> child_types;
+        std::map<std::string, int> type_counts;
         for (const auto& child : non_leaf_children) {
           child_types.push_back(dfs(child, visited));
+          type_counts[child_types.back()]++;
         }
-        std::map<std::string, int> type_counts;
-        for (const auto& t : child_types) {
-          type_counts[t]++;
+        std::set<std::string> grouped_types;
+        for (const auto& pair : type_counts) {
+          grouped_types.insert(std::to_string(pair.second) + pair.first);
         }
-        std::vector<std::pair<int, std::string>> count_type_pairs;
-        for (auto it = type_counts.begin(); it != type_counts.end(); ++it) {
-          count_type_pairs.emplace_back(it->second, it->first);
-        }
-        std::sort(count_type_pairs.begin(), count_type_pairs.end());
-        std::vector<std::string> grouped_types;
-        for (const auto& pair : count_type_pairs) {
-          grouped_types.push_back(std::to_string(pair.first) + pair.second);
-        }
-        std::sort(grouped_types.begin(), grouped_types.end());
         std::string result = open_delim;
         if (leaf_count > 0) {
           result += std::to_string(leaf_count) + sep;
         }
-        for (size_t i = 0; i < grouped_types.size(); ++i) {
-          if (i > 0) result += sep;
-          result += grouped_types[i];
+        //Loop of count_type_pairs to ensure order
+        for (auto it = grouped_types.begin(); it != grouped_types.end(); ++it) {
+          if (it != grouped_types.begin() ) { result += sep; }
+          result += *it;
         }
         result += close_delim;
         return result;
@@ -351,6 +344,7 @@ std::string viro_notation(int root_region, const std::vector<std::set<int>>& reg
   std::set<int> visited;
   return dfs(root_region, visited);
 }
+
 }
 
 namespace Utils {
