@@ -11,3 +11,35 @@ test_full:
     - make
     - make test_full
 
+speedtest:
+  stage: test
+  image: gcc:latest
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - when: manual
+  before_script:
+    - apt-get update && apt-get install -y make g++ wget git
+  script:
+    - |
+      if [ "$CI_PIPELINE_SOURCE" = "merge_request_event" ]; then
+        # Save current branch name
+        MR_BRANCH="$CI_COMMIT_REF_NAME"
+        # Run benchmark on MR branch
+        make clean && make && make benchmark | tee mr_benchmark.txt
+        MR_RESULT=$(grep '^Average:' mr_benchmark.txt | grep -o -m1 '[0-9]\+\(\.[0-9]\+\)\?')
+        git fetch origin master
+        git checkout origin/master
+        make clean && make && make benchmark | tee master_benchmark.txt
+        MASTER_RESULT=$(grep '^Average:' master_benchmark.txt | grep -o -m1 '[0-9]\+\(\.[0-9]\+\)\?')
+        # Compare results (higher is better)
+        echo "MR: $MR_RESULT, master: $MASTER_RESULT"
+        awk -v mr="$MR_RESULT" -v master="$MASTER_RESULT" 'BEGIN { if (mr > master) exit 0; else exit 1 }'
+      else
+        # Manual run: compare branch to itself
+        make clean && make && make benchmark | tee run1.txt
+        RESULT1=$(grep '^Average:' run1.txt | grep -o -m1 '[0-9]\+\(\.[0-9]\+\)\?')
+        make clean && make && make benchmark | tee run2.txt
+        RESULT2=$(grep '^Average:' run2.txt | grep -o -m1 '[0-9]\+\(\.[0-9]\+\)\?')
+        echo "Run1: $RESULT1, Run2: $RESULT2"
+        awk -v r1="$RESULT1" -v r2="$RESULT2" 'BEGIN { if (r1 > r2) exit 0; else exit 0 }'
+      fi
