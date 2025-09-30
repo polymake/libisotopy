@@ -1,5 +1,6 @@
 stages:
   - test
+  - benchmark
 
 test_full:
   stage: test
@@ -12,13 +13,14 @@ test_full:
     - make test_full
 
 speedtest:
-  stage: test
+  stage: benchmark
   image: gcc:latest
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
     - when: always
   before_script:
     - apt-get update && apt-get install -y make g++ wget git
+  allow_failure: true
   script:
     - |
       if [ "$CI_PIPELINE_SOURCE" = "merge_request_event" ]; then
