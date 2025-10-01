@@ -11,16 +11,39 @@
 
 namespace Isotopy {
 
-Graph::Graph(int delta, const std::vector<bool>&sign_vector, const std::set<std::set<int>>& triangles) {
-  std::set<std::pair<int, int>> edges;
+Graph::Graph(int delta, const std::vector<bool>& sign_vector, const std::set<std::set<int>>& triangles) {
+  size_t nverts = (delta + 1) * (delta + 2) / 2;
+  size_t nedges = 3*delta + 3/2*(delta*delta-delta);
+
+  size_t upper_size = nverts * (nverts - 1) / 2;
+  std::vector<bool> adjacency(upper_size, false);
+
+  auto idx = [nverts](int i, int j) {
+    if (i > j) std::swap(i, j);
+    return i * nverts - (i * (i + 1)) / 2 + (j - i - 1);
+  };
+
   for (const auto& triangle : triangles) {
     if (triangle.size() != 3) {
       throw std::invalid_argument("Each triangle must have exactly 3 vertices.");
     }
-    std::vector<int> verts(triangle.begin(), triangle.end());
-    edges.insert({verts[0], verts[1]});
-    edges.insert({verts[1], verts[2]});
-    edges.insert({verts[2], verts[0]});
+    auto it1 = triangle.begin();
+    for (int a = 0; a < 2; ++a, ++it1) {
+      auto it2 = std::next(it1);
+      for (int b = a + 1; b < 3; ++b, ++it2) {
+        adjacency[idx(*it1, *it2)] = true;
+      }
+    }
+  }
+
+  std::vector<std::pair<int, int>> edges;
+  edges.reserve(nedges);
+  for (size_t i = 0; i < nverts; ++i) {
+    for (size_t j = i + 1; j < nverts; ++j) {
+      if (adjacency[idx(i, j)]) {
+        edges.push_back({static_cast<int>(i), static_cast<int>(j)});
+      }
+    }
   }
   *this = Graph(delta, sign_vector, edges);
 }
