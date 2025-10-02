@@ -27,8 +27,8 @@ speedtest:
         MR_BRANCH="$CI_COMMIT_REF_NAME"
         make clean && make && make benchmark | tee mr_benchmark.txt
         MR_RESULT=$(awk '/^Average:/ {for(i=2;i<=NF;i++) if($i ~ /^[0-9.]+$/) {print $i; exit}}' mr_benchmark.txt)
-        git fetch origin master
-        git checkout origin/master
+        git fetch origin $CI_MERGE_REQUEST_TARGET_BRANCH_NAME
+        git checkout origin/$CI_MERGE_REQUEST_TARGET_BRANCH_NAME
         make clean && make && make benchmark | tee master_benchmark.txt
         MASTER_RESULT=$(awk '/^Average:/ {for(i=2;i<=NF;i++) if($i ~ /^[0-9.]+$/) {print $i; exit}}' master_benchmark.txt)
         # Compare results (higher is better)
