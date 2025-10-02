@@ -1865,7 +1865,7 @@
   even: 4
   odd: 4
   total: 8
-  viro: "<1v1<2>v2<1>>"
+  viro: "<1v2<1>v1<2>>"
   old_test_nr: 11522
 
 - degree: 8
@@ -1965,7 +1965,7 @@
   even: 3
   odd: 4
   total: 7
-  viro: "<1<2>v2<1>>"
+  viro: "<2<1>v1<2>>"
   old_test_nr: 15685
 
 - degree: 8
@@ -2115,7 +2115,7 @@
   even: 4
   odd: 6
   total: 10
-  viro: "<1v1<4>v2<1>>"
+  viro: "<1v2<1>v1<4>>"
   old_test_nr: 20419
 
 - degree: 8
@@ -2125,7 +2125,7 @@
   even: 6
   odd: 4
   total: 10
-  viro: "<3v1<2>v2<1>>"
+  viro: "<3v2<1>v1<2>>"
   old_test_nr: 21403
 
 - degree: 8
@@ -2535,7 +2535,7 @@
   even: 3
   odd: 5
   total: 8
-  viro: "<1<3>v2<1>>"
+  viro: "<2<1>v1<3>>"
   old_test_nr: 68984
 
 - degree: 8
@@ -2595,7 +2595,7 @@
   even: 3
   odd: 6
   total: 9
-  viro: "<1<4>v2<1>>"
+  viro: "<2<1>v1<4>>"
   old_test_nr: 76678
 
 - degree: 8
@@ -2945,7 +2945,7 @@
   even: 4
   odd: 5
   total: 9
-  viro: "<1v1<3>v2<1>>"
+  viro: "<1v2<1>v1<3>>"
   old_test_nr: 178472
 
 - degree: 8
@@ -2965,7 +2965,7 @@
   even: 5
   odd: 4
   total: 9
-  viro: "<2v1<2>v2<1>>"
+  viro: "<2v2<1>v1<2>>"
   old_test_nr: 193251
 
 - degree: 8
@@ -3045,7 +3045,7 @@
   even: 8
   odd: 4
   total: 12
-  viro: "<5v1<2>v2<1>>"
+  viro: "<5v2<1>v1<2>>"
   old_test_nr: 224024
 
 - degree: 8
@@ -16436,7 +16436,7 @@
   even: 0
   odd: 0
   total: 0
-  viro: "<0>"
+  viro: "<>"
   old_test_nr: 0
 
 - degree: 6
@@ -16446,7 +16446,7 @@
   even: 0
   odd: 0
   total: 0
-  viro: "<0>"
+  viro: "<>"
   old_test_nr: 0
 
 - degree: 6
@@ -16456,7 +16456,7 @@
   even: 0
   odd: 0
   total: 0
-  viro: "<0>"
+  viro: "<>"
   old_test_nr: 0
 
 - degree: 6
@@ -16466,7 +16466,7 @@
   even: 0
   odd: 0
   total: 0
-  viro: "<0>"
+  viro: "<>"
   old_test_nr: 0
 
 - degree: 6
@@ -16476,7 +16476,7 @@
   even: 0
   odd: 0
   total: 0
-  viro: "<0>"
+  viro: "<>"
   old_test_nr: 0
 
 - degree: 6
@@ -16486,7 +16486,7 @@
   even: 0
   odd: 0
   total: 0
-  viro: "<0>"
+  viro: "<>"
   old_test_nr: 0
 
 - degree: 6
@@ -16496,7 +16496,7 @@
   even: 0
   odd: 0
   total: 0
-  viro: "<0>"
+  viro: "<>"
   old_test_nr: 0
 
 - degree: 6
@@ -16506,7 +16506,7 @@
   even: 0
   odd: 0
   total: 0
-  viro: "<0>"
+  viro: "<>"
   old_test_nr: 0
 
 - degree: 6
@@ -16516,7 +16516,7 @@
   even: 0
   odd: 0
   total: 0
-  viro: "<0>"
+  viro: "<>"
   old_test_nr: 0
 
 - degree: 6
@@ -16526,7 +16526,7 @@
   even: 0
   odd: 0
   total: 0
-  viro: "<0>"
+  viro: "<>"
   old_test_nr: 0
 
 - degree: 6
@@ -16536,7 +16536,7 @@
   even: 0
   odd: 0
   total: 0
-  viro: "<0>"
+  viro: "<>"
   old_test_nr: 0
 
 - degree: 6
@@ -16546,7 +16546,7 @@
   even: 0
   odd: 0
   total: 0
-  viro: "<0>"
+  viro: "<>"
   old_test_nr: 0
 
 - degree: 4
@@ -16556,7 +16556,7 @@
   even: 0
   odd: 0
   total: 0
-  viro: "<0>"
+  viro: "<>"
   old_test_nr: 0
 
 - degree: 6
@@ -16566,7 +16566,7 @@
   even: 0
   odd: 0
   total: 0
-  viro: "<0>"
+  viro: "<>"
   old_test_nr: 0
 
 - degree: 8
@@ -16576,7 +16576,7 @@
   even: 0
   odd: 0
   total: 0
-  viro: "<0>"
+  viro: "<>"
   old_test_nr: 0
 
 - degree: 4
@@ -16586,7 +16586,7 @@
   even: 0
   odd: 0
   total: 0
-  viro: "<0>"
+  viro: "<>"
   old_test_nr: 0
 
 - degree: 6

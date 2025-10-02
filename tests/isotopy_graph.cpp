@@ -133,4 +133,65 @@ TEST_CASE("Isotopy::Graph 75", "[isotopy_graph]") {
 }
 
 
+TEST_CASE("Canonical ordering - Curve1 (W&B case 1)", "[canonical_viro]") {
+    int delta = 8;
+    std::vector<bool> sign = {
+        false, true, true, false, false, false, true, true, true, false, true, true, 
+        true, true, true, true, true, true, false, true, false, true, false, true, 
+        true, false, true, false, true, true, false, false, false, true, false, 
+        true, true, true, false, false, false, false, false, true, false
+    };
+    std::set<std::set<int>> triangles = {
+        {0,1,9}, {1,2,9}, {2,10,3}, {2,10,9}, {11,5,10}, {4,10,5}, {11,6,7}, {8,11,7}, 
+        {3,10,4}, {11,5,6}, {12,8,13}, {8,13,14}, {22,14,15}, {11,19,12}, {8,22,16}, 
+        {24,10,17}, {18,10,11}, {11,19,18}, {10,17,9}, {20,14,13}, {8,11,12}, {19,18,24}, 
+        {20,14,21}, {14,15,8}, {12,20,13}, {20,21,24}, {8,22,15}, {32,16,28}, {24,10,18}, 
+        {12,20,19}, {19,20,24}, {22,14,21}, {21,22,24}, {22,25,24}, {22,30,26}, {26,22,25}, 
+        {25,30,24}, {29,39,33}, {16,33,23}, {27,30,31}, {26,30,25}, {31,30,35}, {35,16,22}, 
+        {35,16,32}, {35,27,31}, {39,16,33}, {35,22,27}, {40,34,38}, {39,16,28}, {28,39,36}, 
+        {22,30,27}, {36,28,32}, {36,32,35}, {29,39,37}, {37,29,34}, {33,29,23}, {36,39,35}, 
+        {37,40,39}, {40,34,37}, {38,40,41}, {44,40,43}, {40,42,39}, {41,40,43}, {44,40,42}
+    };
+    
+    Isotopy::Graph graph(delta, sign, triangles);
+    graph.isotopy_type();
+    
+    // This should produce the canonical form <9v1<1>v1<10>>
+    // (not the non-canonical <9v1<10>v1<1>>)
+    REQUIRE(graph.even_regions() == 11);
+    REQUIRE(graph.odd_regions() == 11);
+    REQUIRE(graph.viro_notation() == "<9v1<1>v1<10>>");
+}
+
+TEST_CASE("Canonical ordering - Curve2 (W&B case 3)", "[canonical_viro]") {
+    int delta = 8;
+    std::vector<bool> sign = {
+        false, true, false, true, false, true, false, true, true, false, true, true, 
+        true, false, true, false, true, false, true, false, true, true, true, false, 
+        false, false, false, false, true, true, false, true, false, false, false, 
+        false, true, false, false, false, false, true, true, true, false
+    };
+    std::set<std::set<int>> triangles = {
+        {1,17,9}, {2,11,3}, {2,10,11}, {1,17,10}, {5,11,4}, {2,10,1}, {5,12,11}, {6,18,12}, 
+        {5,12,6}, {11,3,4}, {24,8,14}, {24,7,19}, {24,7,14}, {8,14,7}, {20,8,15}, {9,1,0}, 
+        {10,11,18}, {18,11,12}, {10,17,18}, {6,18,13}, {19,18,24}, {6,13,7}, {19,7,13}, 
+        {20,16,15}, {21,16,22}, {24,22,25}, {28,16,23}, {15,16,8}, {17,18,24}, {13,18,19}, 
+        {24,8,20}, {24,16,20}, {24,22,21}, {16,35,32}, {24,16,21}, {26,22,25}, {25,31,30}, 
+        {16,35,22}, {28,23,29}, {26,31,27}, {22,35,27}, {25,30,24}, {32,33,29}, {27,26,22}, 
+        {32,29,28}, {33,43,41}, {31,35,30}, {42,43,44}, {41,33,38}, {32,16,28}, {36,37,39}, 
+        {35,36,39}, {39,43,42}, {35,27,31}, {35,33,36}, {33,38,34}, {25,31,26}, {34,33,29}, 
+        {36,37,33}, {37,39,40}, {43,37,40}, {35,33,32}, {33,43,37}, {39,43,40}
+    };
+    
+    Isotopy::Graph graph(delta, sign, triangles);
+    graph.isotopy_type();
+    
+    // This should produce the canonical form <5v1<1>v1<14>>
+    // (not the non-canonical <5v1<14>v1<1>>)
+    REQUIRE(graph.even_regions() == 7);
+    REQUIRE(graph.odd_regions() == 15);
+    REQUIRE(graph.viro_notation() == "<5v1<1>v1<14>>");
+}
+
+
 

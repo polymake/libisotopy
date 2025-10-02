@@ -332,6 +332,9 @@ std::string viro_notation(int root_region, const std::vector<std::set<int>>& reg
         }
       }
       if (non_leaf_children.empty()) {
+        if (leaf_count == 0) {
+          return open_delim  + close_delim;
+        }
         return open_delim + std::to_string(leaf_count) + close_delim;
       } else if (leaf_count == 0 && non_leaf_children.size() == 1) {
         return open_delim + "1" + dfs(non_leaf_children[0], visited) + close_delim;
@@ -342,18 +345,25 @@ std::string viro_notation(int root_region, const std::vector<std::set<int>>& reg
           child_types.push_back(dfs(child, visited));
           type_counts[child_types.back()]++;
         }
-        std::set<std::string> grouped_types;
+        std::vector<std::pair<int,std::string>> grouped_types;
         for (const auto& pair : type_counts) {
-          grouped_types.insert(std::to_string(pair.second) + pair.first);
+          grouped_types.push_back(std::make_pair(pair.second, pair.first));
         }
+        std::sort(grouped_types.begin(), grouped_types.end(), [](const std::pair<int, std::string>& a, const std::pair<int, std::string>& b) {
+            if (a.second.length() != b.second.length()) {
+            return a.second.length() < b.second.length();
+            }
+            return a.second < b.second;
+            });
+
         std::string result = open_delim;
         if (leaf_count > 0) {
           result += std::to_string(leaf_count) + sep;
         }
         //Loop of count_type_pairs to ensure order
         for (auto it = grouped_types.begin(); it != grouped_types.end(); ++it) {
-          if (it != grouped_types.begin() ) { result += sep; }
-          result += *it;
+          if (it != grouped_types.begin()) { result += sep; }
+          result += std::to_string(it->first) + it->second;
         }
         result += close_delim;
         return result;
@@ -363,6 +373,7 @@ std::string viro_notation(int root_region, const std::vector<std::set<int>>& reg
   std::set<int> visited;
   return dfs(root_region, visited);
 }
+
 
 }
 
