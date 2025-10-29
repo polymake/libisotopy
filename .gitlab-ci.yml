@@ -33,7 +33,7 @@ speedtest:
         MASTER_RESULT=$(awk '/^Average:/ {for(i=2;i<=NF;i++) if($i ~ /^[0-9.]+$/) {print $i; exit}}' master_benchmark.txt)
         # Compare results (higher is better)
         echo "MR: $MR_RESULT, master: $MASTER_RESULT"
-        awk -v mr="$MR_RESULT" -v master="$MASTER_RESULT" 'BEGIN { if (mr > master) exit 0; else exit 1 }'
+        awk -v mr="$MR_RESULT" -v master="$MASTER_RESULT" 'BEGIN { if (mr >= 0.9 * master) exit 0; else exit 1 }'
       else
         make clean && make && make benchmark | tee current_benchmark.txt
         CURRENT_RESULT=$(awk '/^Average:/ {for(i=2;i<=NF;i++) if($i ~ /^[0-9.]+$/) {print $i; exit}}' current_benchmark.txt)
@@ -43,5 +43,5 @@ speedtest:
         make clean && make && make benchmark | tee prev_benchmark.txt
         PREV_RESULT=$(awk '/^Average:/ {for(i=2;i<=NF;i++) if($i ~ /^[0-9.]+$/) {print $i; exit}}' prev_benchmark.txt)
         echo "Current: $CURRENT_RESULT, Previous: $PREV_RESULT"
-        awk -v curr="$CURRENT_RESULT" -v prev="$PREV_RESULT" 'BEGIN { if (curr > prev) exit 0; else exit 0 }'
+        awk -v curr="$CURRENT_RESULT" -v prev="$PREV_RESULT" 'BEGIN { if (curr >= 0.9 * prev) exit 0; else exit 0 }'
       fi

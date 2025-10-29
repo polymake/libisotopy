@@ -120,6 +120,20 @@ TEST_CASE("Isotopy::Graph batch test from YAML file", "[isotopy_graph][yaml]") {
     REQUIRE(graph.even_regions() == expected_p);
     REQUIRE(graph.odd_regions() == expected_n);
     REQUIRE(graph.viro_notation() == viro);
+    /*
+    auto sign_triangles_pair = Utils::pcom_to_signs_and_triangles(pcom);
+    REQUIRE(sign_triangles_pair.first == sign);
+    REQUIRE(sign_triangles_pair.second == triangles);
+    std::string pcom_created =  Utils::signs_and_triangles_to_pcom(sign_triangles_pair.first, sign_triangles_pair.second);
+    auto sign_triangles_pair_created = Utils::pcom_to_signs_and_triangles(pcom_created);
+    REQUIRE(sign_triangles_pair_created.first == sign);
+    REQUIRE(sign_triangles_pair_created.second == triangles);
+    */
+    std::string pcom = Utils::signs_and_triangles_to_pcom(signs_vec, triangulation_vec);
+    std::pair<std::vector<bool>, std::set<std::set<int>>> sign_triangles_pair = Utils::pcom_to_signs_and_triangles(pcom);
+    REQUIRE(sign_triangles_pair.first == signs_vec);
+    REQUIRE(sign_triangles_pair.second == triangulation_vec);
+
 
   }
 }
