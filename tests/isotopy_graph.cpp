@@ -10,6 +10,51 @@
 
 #include <regex>
 
+
+TEST_CASE("Isotopy::Graph from triangulation  (Harnack 8)", "[isotopy_graph]") {
+  int delta = 8;
+  std::vector<bool> sign {1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1};
+  std::set<std::set<int>> triangles = {{1,0,9},{1,9,10},{2,1,10},{2,10,11},{3,2,11},{3,11,12},{4,3,12},{4,12,13},{5,4,13},{5,13,14},{6,5,14},{6,14,15},{7,6,15},{7,15,16},{8,7,16},{10,9,17},{10,17,18},{11,10,18},{11,18,19},{12,11,19},{12,19,20},{13,12,20},{13,20,21},{14,13,21},{14,21,22},{15,14,22},{15,22,23},{16,15,23},{18,17,24},{18,24,25},{19,18,25},{19,25,26},{20,19,26},{20,26,27},{21,20,27},{21,27,28},{22,21,28},{22,28,29},{23,22,29},{25,24,30},{25,30,31},{26,25,31},{26,31,32},{27,26,32},{27,32,33},{28,27,33},{28,33,34},{29,28,34},{31,30,35},{31,35,36},{32,31,36},{32,36,37},{33,32,37},{33,37,38},{34,33,38},{36,35,39},{36,39,40},{37,36,40},{37,40,41},{38,37,41},{40,39,42},{40,42,43},{41,40,43},{43,42,44}};
+
+  Isotopy::Graph graph(delta, sign, triangles);
+  graph.isotopy_type();
+  std::string expected_viro = "<1<1<1<1>>>>";
+  REQUIRE(graph.viro_notation() == expected_viro);
+  std::map<std::pair<int,int>, int> pt_map = Utils::get_pt2int(delta);
+  REQUIRE(graph.component[pt_map.at(std::make_pair(0,0))] == graph.component[pt_map.at(std::make_pair(0,1))]);
+  REQUIRE(graph.component[pt_map.at(std::make_pair(0,0))] == graph.component[pt_map.at(std::make_pair(1,0))]);
+  REQUIRE(graph.component[pt_map.at(std::make_pair(0,0))] == graph.component[pt_map.at(std::make_pair(1,1))]);
+  //std::string pcom = Utils::signs_and_triangles_to_pcom(sign,triangles);
+  //REQUIRE(Utils::pcom_to_signs_and_triangles(pcom) == std::make_pair(sign,triangles)); //Maybe sort triangles
+
+}
+
+TEST_CASE("Isotopy::Graph from triangulation  (Loading from pcom Test)", "[isotopy_graph]") {
+    std::string pcom = "{\"TYPE\":        \"<13v1<6>v1<1>>\",\"PATCHWORK\":[{\"SIGNS\":\n[true,true,true,true,true,true,true,true,false,true,false,true,true,true,true,true,\n true,true,true,true,true,true,true,false,true,false,true,true,true,true,true,true,true,true,false,true,true,true,true,true,false,false,true,true]}],\"_ns\":{\"polymake\":[\"https://polymake.org\",\"4.13\"]},\"DUAL_SUBDIVISION\":{\"WEIGHTS\":[\"113\",\"321\",\"530\",\"740\",\"951\",\"1163\",\"1376\",\"1590\",\"1805\",\"96\",\"35\",\"154\",\"355\",\"559\",\"764\",\"970\",\"1177\",\"80\",\"26\",\"9\",\"0\",\"196\",\"395\",\"598\",\"65\",\"18\",\"4\",\"4\",\"18\",\"40\",\"51\",\"11\",\"0\",\"9\",\"28\",\"38\",\"5\",\"1\",\"17\",\"26\",\"2\",\"7\",\"15\",\"0\",\"5\"],\"MAXIMAL_CELLS\":[[0,9,10],[10,18,19],[20,27,28],[0,12,13],[0,13,14],[0,14,15],[0,15,16],[0,1,16],[2,3,16],[1,2,16],[7,8,16],[6,7,16],[5,6,16],[4,5,16],[3,4,16],[9,10,17],[13,14,23],[12,13,23],\n[0,\n              10,\n        20],[10,19,20],[28,29,34],[0,11,22],[11,21,22],[0,12,22],[12,22,23],[15,16,23],[14,15,23],[10,17,24],[0,20,29],[0,11,29],[20,28,29],[18,19,25],[10,24,30],[19,20,26],[22,23,29],[11,21,29],[21,22,29],[20,27,37],[27,28,33],[28,34,38],[10,30,35],[19,25,31],[28,33,41],[20,26,32],[19,26,36],[20,37,43],[27,33,37],[20,32,43],[26,32,36],[19,31,36],[28,38,41],[37,41,43],[33,37,41],[10,35,39],[32,36,40],[32,40,43],[10,39,42],[10,42,44],[40,43,44],[36,40,44],[31,36,44],[25,31,44],[18,25,44],[10,18,44],{\"cols\":45}]},\"PURE\":true,\"_type\":\"tropical::Hypersurface<Min>\",\"_id\":\"15-7_nn13-c1-6-c1-1\",\"_attrs\":{\"TYPE\":{\"attachment\":true}}}";
+    //std::string pcom("SIGNS");
+   std::vector<bool> sign {1,1,1,1,1,1,1,1,0,1,0,1,1,1,1,1,1,1,1,1,1,1,1,0,1,0,1,1,1,1,1,1,1,1,0,1,1,1,1,1,0,0,1,1};
+   std::set<std::set<int>> triangles {{0,9,10},{10,18,19},{20,27,28},{0,12,13},{0,13,14},{0,14,15},{0,15,16},{0,1,16},{2,3,16},{1,2,16},{7,8,16},{6,7,16},{5,6,16},{4,5,16},{3,4,16},{9,10,17},{13,14,23},{12,13,23},{0,10,20},{10,19,20},{28,29,34},{0,11,22},{11,21,22},{0,12,22},{12,22,23},{15,16,23},{14,15,23},{10,17,24},{0,20,29},{0,11,29},{20,28,29},{18,19,25},{10,24,30},{19,20,26},{22,23,29},{11,21,29},{21,22,29},{20,27,37},{27,28,33},{28,34,38},{10,30,35},{19,25,31},{28,33,41},{20,26,32},{19,26,36},{20,37,43},{27,33,37},{20,32,43},{26,32,36},{19,31,36},{28,38,41},{37,41,43},{33,37,41},{10,35,39},{32,36,40},{32,40,43},{10,39,42},{10,42,44},{40,43,44},{36,40,44},{31,36,44},{25,31,44},{18,25,44},{10,18,44}};
+  auto sign_triangles_pair = Utils::pcom_to_signs_and_triangles(pcom);
+  REQUIRE(sign_triangles_pair.first == sign);
+  REQUIRE(sign_triangles_pair.second == triangles);
+  std::string pcom_created =  Utils::signs_and_triangles_to_pcom(sign_triangles_pair.first, sign_triangles_pair.second);
+  auto sign_triangles_pair_created = Utils::pcom_to_signs_and_triangles(pcom_created);
+  REQUIRE(sign_triangles_pair_created.first == sign);
+  REQUIRE(sign_triangles_pair_created.second == triangles);
+}
+
+TEST_CASE("Isotopy::Graph from triangulation  (First odd degree Test)", "[isotopy_graph]") {
+  int delta = 5;
+  std::vector<bool> sign {1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1};
+  std::set<std::set<int>> triangles {{1, 0, 6}, {1, 6, 7}, {2, 1, 7}, {2, 7, 8}, {3, 2, 8}, {3, 8, 9}, {4, 3, 9}, {4, 9, 10}, {5, 4, 10}, {7, 6, 11}, {7, 11, 12}, {8, 7, 12}, {8, 12, 13}, {9, 8, 13}, {9, 13, 14}, {10, 9, 14}, {12, 11, 15}, {12, 15, 16}, {13, 12, 16}, {13, 16, 17}, {14, 13, 17}, {16, 15, 18}, {16, 18, 19}, {17, 16, 19}, {19, 18, 20}};
+  Isotopy::Graph graph(delta, sign, triangles);
+  graph.isotopy_type();
+  std::string expected_viro = "<Jv1<1>>";
+  REQUIRE(graph.viro_notation() == expected_viro);
+  REQUIRE(graph.even_regions() == 2);
+  REQUIRE(graph.odd_regions() == 1);
+}
+
 TEST_CASE("Isotopy::Graph from triangulation  (Test Case 0)", "[isotopy_graph]") {
     
     int delta = 8;
@@ -95,12 +140,13 @@ TEST_CASE("Isotopy::Graph Test Case 1202044", "[isotopy_graph]") {
 }
 
 TEST_CASE("Isotopy::Graph Sebastian's example", "[isotopy_graph]") {
-
     int delta = 6;
     std::vector<bool> sign {0,0,1,0,1,0,1,0,0,1,1,1,1,1,1,0,0,1,0,1,0,1,1,1,1,0,1,1};
     std::set<std::set<int>> triangles {{5,6,12},{5,11,12},{4,5,11},{11,12,17},{4,10,11},{11,16,17},{3,4,10},{10,11,16},{16,17,21},{2,3,10},{2,9,10},{9,10,16},{1,2,9},{9,16,21},{1,9,21},{1,15,21},{1,8,15},{1,7,8},{7,8,15},{0,1,7},{7,15,21},{7,14,21},{14,20,21},{14,19,20},{7,13,14},{13,14,19},{20,21,24},{20,23,24},{19,20,23},{23,24,26},{13,18,19},{19,22,23},{18,19,22},{23,25,26},{22,23,25},{25,26,27}};
     Isotopy::Graph graph(delta, sign, triangles);
-    graph.isotopy_type();
+    for (int i = 0; i < 10; ++i) {
+      graph.isotopy_type();
+    }
     REQUIRE(graph.p_regions == 1);
     REQUIRE(graph.n_regions == 9);
     REQUIRE(graph.viro_notation() == "<1<9>>");

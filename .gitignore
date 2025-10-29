@@ -1,6 +1,7 @@
 # Build artifacts
 *.o
 *.so
+*.a
 *.exe
 isotopy_graph*
 debug
