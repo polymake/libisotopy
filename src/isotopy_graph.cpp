@@ -339,7 +339,10 @@ std::string Graph::viro_notation(bool unicode) {
   if (delta % 2 == 1) {
     std::string notation = Isotopy::viro_notation(region[root], region_adjacency, unicode);
     const std::string open_delim = unicode ? "\u27E8" : "<";
-    notation.insert(open_delim.size(), unicode ? "J\u2294" : "Jv");
+    const std::string close_delim = unicode ? "\u27E9" : ">";
+    const bool has_additional_components = notation.size() > open_delim.size() + close_delim.size();
+    const std::string insert_fragment = has_additional_components ? (unicode ? "J\u2294" : "Jv") : "J";
+    notation.insert(open_delim.size(), insert_fragment);
     return notation;
   }
   return Isotopy::viro_notation(region[root], region_adjacency, unicode);
@@ -548,4 +551,3 @@ std::string signs_and_triangles_to_pcom(const std::vector<bool>& sign_vector, co
 }
 
 }
-
