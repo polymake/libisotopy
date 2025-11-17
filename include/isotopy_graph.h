@@ -209,6 +209,42 @@ struct Graph {
  * @return The Viro notation string.
  */
 std::string viro_notation(int root_region, const std::vector<std::set<int>>& region_adjacency, bool unicode = false);
+
+/**
+ * @brief Computes the number of vertices in a triangular grid of degree delta.
+ *
+ * For a patchwork of degree delta, the triangular grid has (delta+1)(delta+2)/2 vertices.
+ * This is the number of lattice points in a triangle with side length delta+1.
+ *
+ * @param delta The degree of the patchwork.
+ * @return The number of vertices in the triangular grid.
+ */
+int num_vertices(int delta);
+
+/**
+ * @brief Computes the number of edges in a triangular grid of degree delta.
+ *
+ * The total edges equal the boundary edges (3*delta) plus the interior edges
+ * (three per interior lattice segment), giving 3*delta + 3*(delta^2 - delta)/2.
+ *
+ * @param delta The degree of the patchwork.
+ * @return The number of edges in the triangular grid.
+ */
+int num_edges(int delta);
+
+/**
+ * @brief Converts a set of triangles to a vector of edges.
+ *
+ * Each triangle is represented as a set of three vertex indices. This function extracts all edges
+ * from the triangles, ensuring consistent ordering (smaller index first) and removing duplicates.
+ * Uses an efficient adjacency matrix approach for optimal performance.
+ *
+ * @param delta The degree of the patchwork (determines number of vertices).
+ * @param triangles A set of triangles, where each triangle is a set of three vertex indices.
+ * @return A vector of edges, where each edge is a pair of vertex indices with the smaller index first.
+ */
+std::vector<std::pair<int, int>> triangles_to_edges(int delta, const std::set<std::set<int>>& triangles);
+
 }
 
 namespace Utils {
