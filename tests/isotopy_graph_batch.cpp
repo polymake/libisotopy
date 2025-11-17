@@ -109,7 +109,7 @@ TEST_CASE("Isotopy::Graph batch test from YAML file", "[isotopy_graph][yaml]") {
     std::set<std::set<int>> triangulation_vec = node.at("triangulation").get_value<std::set<std::set<int>>>();
     int expected_p = node.at("even").get_value<int>(); 
     int expected_n = node.at("odd").get_value<int>();
-    size_t nverts = (delta + 1) * (delta + 2) / 2;
+    size_t nverts = Isotopy::num_vertices(delta);
     if (signs_vec.size() != nverts) {
       continue; // Skip invalid test case
     }
@@ -175,4 +175,3 @@ TEST_CASE("Isotopy::Graph batch test from mcurves.txt.xz", "[isotopy_graph]") {
   }
   pclose(pipe);
 }
-

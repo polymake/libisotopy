@@ -119,7 +119,7 @@ TEST_CASE("Isotopy::Graph batch timing analysis from YAML file", "[isotopy_graph
       int delta = node.at("degree").get_value<int>();
       std::vector<bool> signs_vec = node.at("polarisation").get_value<std::vector<bool>>();
       std::set<std::set<int>> triangulation_vec = node.at("triangulation").get_value<std::set<std::set<int>>>();
-      size_t nverts = (delta + 1) * (delta + 2) / 2;
+      size_t nverts = Isotopy::num_vertices(delta);
       if (signs_vec.size() != nverts) {
         continue; // Skip invalid test case
       }

@@ -15,39 +15,8 @@
 namespace Isotopy {
 
 Graph::Graph(int delta, const std::vector<bool>& sign_vector, const std::set<std::set<int>>& triangles) {
-  size_t nverts = (delta + 1) * (delta + 2) / 2;
-  size_t nedges = 3 * delta + (3 * (delta * delta - delta)) / 2;
-
-  size_t upper_size = nverts * (nverts - 1) / 2;
-  std::vector<bool> adjacency(upper_size, false);
-
-  auto idx = [nverts](size_t i, size_t j) {
-    if (i > j) std::swap(i, j);
-    return i * nverts - (i * (i + 1)) / 2 + (j - i - 1);
-  };
-
-  for (const auto& triangle : triangles) {
-    if (triangle.size() != 3) {
-      throw std::invalid_argument("Each triangle must have exactly 3 vertices.");
-    }
-    auto it1 = triangle.begin();
-    for (size_t a = 0; a < 2; ++a, ++it1) {
-      auto it2 = std::next(it1);
-      for (size_t b = a + 1; b < 3; ++b, ++it2) {
-        adjacency[idx(*it1, *it2)] = true;
-      }
-    }
-  }
-
-  std::vector<std::pair<int, int>> edges;
-  edges.reserve(nedges);
-  for (size_t i = 0; i < nverts; ++i) {
-    for (size_t j = i + 1; j < nverts; ++j) {
-      if (adjacency[idx(i, j)]) {
-        edges.push_back({static_cast<int>(i), static_cast<int>(j)});
-      }
-    }
-  }
+  // Convert triangles to edges using the utility function
+  std::vector<std::pair<int, int>> edges = triangles_to_edges(delta, triangles);
   *this = Graph(delta, sign_vector, edges);
 }
 
@@ -57,7 +26,7 @@ Graph::Graph(int delta, const std::vector<bool>& sign_vector, const std::set<std
 
 Graph::Graph(int delta, const std::vector<bool>&sign_vector, const std::vector<std::pair<int, int>>& edges)
 : delta(delta) {
-  size_t nverts = (delta + 1) * (delta + 2) / 2;
+  size_t nverts = num_vertices(delta);
   assert(sign_vector.size() == nverts && "sign vector length does not match number of vertices");
 
   sign_complete.resize(4 * nverts);
@@ -131,7 +100,7 @@ void Graph::connected_components() {
     return;
   }
 
-  size_t nverts = (delta + 1) * (delta + 2) / 2;
+  size_t nverts = num_vertices(delta);
   int n = 4 * nverts;
   parent.resize(n);
   for (int i = 0; i < n; ++i) parent[i] = i;
@@ -418,6 +387,51 @@ std::string viro_notation(int root_region, const std::vector<std::set<int>>& reg
   return dfs(root_region, visited);
 }
 
+int num_vertices(int delta) {
+  return (delta + 1) * (delta + 2) / 2;
+}
+
+int num_edges(int delta) {
+  return 3 * delta + (3 * (delta * delta - delta)) / 2;
+}
+
+std::vector<std::pair<int, int>> triangles_to_edges(int delta, const std::set<std::set<int>>& triangles) {
+  size_t nverts = num_vertices(delta);
+  size_t nedges = num_edges(delta);
+
+  size_t upper_size = nverts * (nverts - 1) / 2;
+  std::vector<bool> adjacency(upper_size, false);
+
+  auto idx = [nverts](size_t i, size_t j) {
+    if (i > j) std::swap(i, j);
+    return i * nverts - (i * (i + 1)) / 2 + (j - i - 1);
+  };
+
+  for (const auto& triangle : triangles) {
+    if (triangle.size() != 3) {
+      throw std::invalid_argument("Each triangle must have exactly 3 vertices.");
+    }
+    auto it1 = triangle.begin();
+    for (size_t a = 0; a < 2; ++a, ++it1) {
+      auto it2 = std::next(it1);
+      for (size_t b = a + 1; b < 3; ++b, ++it2) {
+        adjacency[idx(*it1, *it2)] = true;
+      }
+    }
+  }
+
+  std::vector<std::pair<int, int>> edges;
+  edges.reserve(nedges);
+  for (size_t i = 0; i < nverts; ++i) {
+    for (size_t j = i + 1; j < nverts; ++j) {
+      if (adjacency[idx(i, j)]) {
+        edges.push_back({static_cast<int>(i), static_cast<int>(j)});
+      }
+    }
+  }
+
+  return edges;
+}
 
 }
 
@@ -426,7 +440,7 @@ namespace Utils {
 std::map<std::pair<int,int>, int> get_pt2int(int delta) {
   std::map<std::pair<int,int>, int> pt2int;
   int index = 0;
-  int nverts = (delta + 1) * (delta + 2) / 2;
+  int nverts = Isotopy::num_vertices(delta);
   for (int orthant = 0; orthant < 4; ++orthant) {
     for (int limit = delta; limit >= 0; --limit) {
       for (int y = 0; y <= limit; ++y) {

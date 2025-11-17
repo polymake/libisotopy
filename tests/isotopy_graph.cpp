@@ -239,5 +239,78 @@ TEST_CASE("Canonical ordering - Curve2 (W&B case 3)", "[canonical_viro]") {
     REQUIRE(graph.viro_notation() == "<5v1<1>v1<14>>");
 }
 
+TEST_CASE("Isotopy::num_vertices - Basic calculation", "[isotopy]") {
+    // Test the formula: nverts = (delta+1)(delta+2)/2
+    REQUIRE(Isotopy::num_vertices(0) == 1);   // (0+1)(0+2)/2 = 1
+    REQUIRE(Isotopy::num_vertices(1) == 3);   // (1+1)(1+2)/2 = 3
+    REQUIRE(Isotopy::num_vertices(2) == 6);   // (2+1)(2+2)/2 = 6
+    REQUIRE(Isotopy::num_vertices(3) == 10);  // (3+1)(3+2)/2 = 10
+    REQUIRE(Isotopy::num_vertices(4) == 15);  // (4+1)(4+2)/2 = 15
+    REQUIRE(Isotopy::num_vertices(5) == 21);  // (5+1)(5+2)/2 = 21
+    REQUIRE(Isotopy::num_vertices(8) == 45);  // (8+1)(8+2)/2 = 45
+}
 
+TEST_CASE("Isotopy::num_edges - Basic calculation", "[isotopy]") {
+    // Test the formula: nedges = 3*delta + 3*(delta^2 - delta)/2
+    REQUIRE(Isotopy::num_edges(0) == 0);
+    REQUIRE(Isotopy::num_edges(1) == 3);
+    REQUIRE(Isotopy::num_edges(2) == 9);
+    REQUIRE(Isotopy::num_edges(3) == 18);
+    REQUIRE(Isotopy::num_edges(4) == 30);
+    REQUIRE(Isotopy::num_edges(5) == 45);
+}
 
+TEST_CASE("Isotopy::triangles_to_edges - Basic triangle", "[isotopy]") {
+    // Single triangle with vertices 0, 1, 2 for delta=2
+    int delta = 2;
+    std::set<std::set<int>> triangles = {{0, 1, 2}};
+
+    auto edges = Isotopy::triangles_to_edges(delta, triangles);
+
+    // Should produce 3 edges: (0,1), (0,2), (1,2)
+    REQUIRE(edges.size() == 3);
+    std::set<std::pair<int,int>> edge_set(edges.begin(), edges.end());
+    REQUIRE(edge_set.count({0, 1}) == 1);
+    REQUIRE(edge_set.count({0, 2}) == 1);
+    REQUIRE(edge_set.count({1, 2}) == 1);
+}
+
+TEST_CASE("Isotopy::triangles_to_edges - Multiple triangles with shared edges", "[isotopy]") {
+    // Two triangles sharing an edge: {0,1,2} and {1,2,3} for delta=3
+    int delta = 3;
+    std::set<std::set<int>> triangles = {{0, 1, 2}, {1, 2, 3}};
+
+    auto edges = Isotopy::triangles_to_edges(delta, triangles);
+
+    // Should produce 5 unique edges: (0,1), (0,2), (1,2), (1,3), (2,3)
+    std::set<std::pair<int,int>> edge_set(edges.begin(), edges.end());
+    REQUIRE(edge_set.size() == 5);
+    REQUIRE(edge_set.count({0, 1}) == 1);
+    REQUIRE(edge_set.count({0, 2}) == 1);
+    REQUIRE(edge_set.count({1, 2}) == 1);
+    REQUIRE(edge_set.count({1, 3}) == 1);
+    REQUIRE(edge_set.count({2, 3}) == 1);
+}
+
+TEST_CASE("Isotopy::triangles_to_edges - Edge ordering consistency", "[isotopy]") {
+    // Triangle with vertices in different orders for delta=8
+    int delta = 8;
+    std::set<std::set<int>> triangles = {{5, 2, 8}};
+
+    auto edges = Isotopy::triangles_to_edges(delta, triangles);
+
+    // Should produce edges with smaller index first
+    std::set<std::pair<int,int>> edge_set(edges.begin(), edges.end());
+    REQUIRE(edge_set.size() == 3);
+    REQUIRE(edge_set.count({2, 5}) == 1);
+    REQUIRE(edge_set.count({2, 8}) == 1);
+    REQUIRE(edge_set.count({5, 8}) == 1);
+}
+
+TEST_CASE("Isotopy::triangles_to_edges - Invalid triangle", "[isotopy]") {
+    // Triangle with wrong number of vertices
+    int delta = 2;
+    std::set<std::set<int>> triangles = {{0, 1, 2, 3}};
+
+    REQUIRE_THROWS_AS(Isotopy::triangles_to_edges(delta, triangles), std::invalid_argument);
+}
