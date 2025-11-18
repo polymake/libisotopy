@@ -52,7 +52,6 @@ Graph::Graph(int delta, const std::vector<bool>&sign_vector, const std::vector<s
   }
 
   side_points_complete.resize(4 * (delta+1));
-  sides_complete.resize(4 * (delta+1), std::vector<bool>(4, false));
   int offset_side_pt = -1;
   int side_points_index = 0;
   //sign vector
@@ -64,23 +63,6 @@ Graph::Graph(int delta, const std::vector<bool>&sign_vector, const std::vector<s
     side_points_complete[side_points_index + delta+1] = offset_side_pt + nverts;
     side_points_complete[side_points_index + 2*(delta+1)] = offset_side_pt + 2*nverts;
     side_points_complete[side_points_index + 3*(delta+1)] = offset_side_pt + 3*nverts;
-
-    sides_complete[side_points_index][0] = true;
-    sides_complete[side_points_index + delta+1][1] = true;
-    sides_complete[side_points_index + 2*(delta+1)][2] = true;
-    sides_complete[side_points_index + 3*(delta+1)][3] = true;
-    if (limit == delta) {
-      sides_complete[side_points_index][3] = true;
-      sides_complete[side_points_index + delta+1][0] = true;
-      sides_complete[side_points_index + 2*(delta+1)][1] = true;
-      sides_complete[side_points_index + 3*(delta+1)][2] = true;
-    } else if (limit == 0) {
-      sides_complete[side_points_index][1] = true;
-      sides_complete[side_points_index][2] = true;
-      sides_complete[side_points_index + delta+1][3] = true;
-      sides_complete[side_points_index + 2*(delta+1)][0] = true;
-    }
-
 
     side_points_index++;
     for (int y = 0; y <= limit; ++y) {

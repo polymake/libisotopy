@@ -38,7 +38,6 @@ struct Graph {
   std::vector<int> side_points_complete;
   std::vector<std::pair<int,int>> edges_complete;
   std::vector<bool> sign_complete;
-  std::vector<std::vector<bool>> sides_complete;
 
   int p_regions = 0; ///< Number of even regions.
   int n_regions = -1; ///< Number of odd regions.
