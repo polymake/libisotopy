@@ -50,14 +50,21 @@ speedtest:
         make clean && make && make benchmark | tee current_benchmark.txt
         CURR_TRI=$(awk '/^Average:/ {for(i=2;i<=NF;i++) if($i ~ /^[0-9.]+$/) {print $i; exit}}' current_benchmark.txt)
         CURR_EDGE=$(awk '/^Average:/ {count++; if(count==2) {for(i=2;i<=NF;i++) if($i ~ /^[0-9.]+$/) {print $i; exit}}}' current_benchmark.txt)
-        git fetch origin
-        PREV_COMMIT=$(git rev-parse HEAD^)
-        git checkout $PREV_COMMIT
-        make clean && make && make benchmark | tee prev_benchmark.txt
-        PREV_TRI=$(awk '/^Average:/ {for(i=2;i<=NF;i++) if($i ~ /^[0-9.]+$/) {print $i; exit}}' prev_benchmark.txt)
-        PREV_EDGE=$(awk '/^Average:/ {count++; if(count==2) {for(i=2;i<=NF;i++) if($i ~ /^[0-9.]+$/) {print $i; exit}}}' prev_benchmark.txt)
-        echo "Triangles - Current: $CURR_TRI, Previous: $PREV_TRI"
-        echo "Edges - Current: $CURR_EDGE, Previous: $PREV_EDGE"
-        # Always pass for non-MR (note: this was already always passing in original)
+        git fetch origin master
+        git checkout origin/master
+        make clean && make && make benchmark | tee master_benchmark.txt
+        MASTER_TRI=$(awk '/^Average:/ {for(i=2;i<=NF;i++) if($i ~ /^[0-9.]+$/) {print $i; exit}}' master_benchmark.txt)
+        MASTER_EDGE=$(awk '/^Average:/ {count++; if(count==2) {for(i=2;i<=NF;i++) if($i ~ /^[0-9.]+$/) {print $i; exit}}}' master_benchmark.txt)
+        echo "Triangles - Current: $CURR_TRI, Master: $MASTER_TRI"
+        echo "Edges - Current: $CURR_EDGE, Master: $MASTER_EDGE"
+        # Report comparison but always pass for non-MR
+        if [ -n "$MASTER_TRI" ] && [ -n "$CURR_TRI" ]; then
+          TRI_RATIO=$(awk -v curr="$CURR_TRI" -v master="$MASTER_TRI" 'BEGIN { printf "%.2f", curr/master }')
+          echo "Triangle speedup: ${TRI_RATIO}x"
+        fi
+        if [ -n "$MASTER_EDGE" ] && [ -n "$CURR_EDGE" ]; then
+          EDGE_RATIO=$(awk -v curr="$CURR_EDGE" -v master="$MASTER_EDGE" 'BEGIN { printf "%.2f", curr/master }')
+          echo "Edge speedup: ${EDGE_RATIO}x"
+        fi
         exit 0
       fi
