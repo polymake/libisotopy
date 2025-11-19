@@ -15,8 +15,9 @@ test_full:
 speedtest:
   stage: benchmark
   image: gcc:latest
-  rules:
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+  needs:
+    - job: test_full
+      artifacts: false
   before_script:
     - apt-get update && apt-get install -y make g++ wget git
   allow_failure: true
@@ -25,22 +26,38 @@ speedtest:
       if [ "$CI_PIPELINE_SOURCE" = "merge_request_event" ]; then
         MR_BRANCH="$CI_COMMIT_REF_NAME"
         make clean && make && make benchmark | tee mr_benchmark.txt
-        MR_RESULT=$(awk '/^Average:/ {for(i=2;i<=NF;i++) if($i ~ /^[0-9.]+$/) {print $i; exit}}' mr_benchmark.txt)
+        MR_TRI=$(awk '/^Average:/ {for(i=2;i<=NF;i++) if($i ~ /^[0-9.]+$/) {print $i; exit}}' mr_benchmark.txt)
+        MR_EDGE=$(awk '/^Average:/ {count++; if(count==2) {for(i=2;i<=NF;i++) if($i ~ /^[0-9.]+$/) {print $i; exit}}}' mr_benchmark.txt)
         git fetch origin $CI_MERGE_REQUEST_TARGET_BRANCH_NAME
         git checkout origin/$CI_MERGE_REQUEST_TARGET_BRANCH_NAME
         make clean && make && make benchmark | tee master_benchmark.txt
-        MASTER_RESULT=$(awk '/^Average:/ {for(i=2;i<=NF;i++) if($i ~ /^[0-9.]+$/) {print $i; exit}}' master_benchmark.txt)
+        MASTER_TRI=$(awk '/^Average:/ {for(i=2;i<=NF;i++) if($i ~ /^[0-9.]+$/) {print $i; exit}}' master_benchmark.txt)
+        MASTER_EDGE=$(awk '/^Average:/ {count++; if(count==2) {for(i=2;i<=NF;i++) if($i ~ /^[0-9.]+$/) {print $i; exit}}}' master_benchmark.txt)
         # Compare results (higher is better)
-        echo "MR: $MR_RESULT, master: $MASTER_RESULT"
-        awk -v mr="$MR_RESULT" -v master="$MASTER_RESULT" 'BEGIN { if (mr >= 0.9 * master) exit 0; else exit 1 }'
+        echo "Triangles - MR: $MR_TRI, master: $MASTER_TRI"
+        echo "Edges - MR: $MR_EDGE, master: $MASTER_EDGE"
+        TRI_OK=$(awk -v mr="$MR_TRI" -v master="$MASTER_TRI" 'BEGIN { if (mr >= 0.9 * master) print 1; else print 0 }')
+        EDGE_OK=$(awk -v mr="$MR_EDGE" -v master="$MASTER_EDGE" 'BEGIN { if (mr >= 0.9 * master) print 1; else print 0 }')
+        if [ "$TRI_OK" = "1" ] && [ "$EDGE_OK" = "1" ]; then
+          echo "Both benchmarks passed!"
+          exit 0
+        else
+          [ "$TRI_OK" = "0" ] && echo "Triangle benchmark failed: $MR_TRI < 0.9 * $MASTER_TRI"
+          [ "$EDGE_OK" = "0" ] && echo "Edge benchmark failed: $MR_EDGE < 0.9 * $MASTER_EDGE"
+          exit 1
+        fi
       else
         make clean && make && make benchmark | tee current_benchmark.txt
-        CURRENT_RESULT=$(awk '/^Average:/ {for(i=2;i<=NF;i++) if($i ~ /^[0-9.]+$/) {print $i; exit}}' current_benchmark.txt)
+        CURR_TRI=$(awk '/^Average:/ {for(i=2;i<=NF;i++) if($i ~ /^[0-9.]+$/) {print $i; exit}}' current_benchmark.txt)
+        CURR_EDGE=$(awk '/^Average:/ {count++; if(count==2) {for(i=2;i<=NF;i++) if($i ~ /^[0-9.]+$/) {print $i; exit}}}' current_benchmark.txt)
         git fetch origin
         PREV_COMMIT=$(git rev-parse HEAD^)
         git checkout $PREV_COMMIT
         make clean && make && make benchmark | tee prev_benchmark.txt
-        PREV_RESULT=$(awk '/^Average:/ {for(i=2;i<=NF;i++) if($i ~ /^[0-9.]+$/) {print $i; exit}}' prev_benchmark.txt)
-        echo "Current: $CURRENT_RESULT, Previous: $PREV_RESULT"
-        awk -v curr="$CURRENT_RESULT" -v prev="$PREV_RESULT" 'BEGIN { if (curr >= 0.9 * prev) exit 0; else exit 0 }'
+        PREV_TRI=$(awk '/^Average:/ {for(i=2;i<=NF;i++) if($i ~ /^[0-9.]+$/) {print $i; exit}}' prev_benchmark.txt)
+        PREV_EDGE=$(awk '/^Average:/ {count++; if(count==2) {for(i=2;i<=NF;i++) if($i ~ /^[0-9.]+$/) {print $i; exit}}}' prev_benchmark.txt)
+        echo "Triangles - Current: $CURR_TRI, Previous: $PREV_TRI"
+        echo "Edges - Current: $CURR_EDGE, Previous: $PREV_EDGE"
+        # Always pass for non-MR (note: this was already always passing in original)
+        exit 0
       fi
