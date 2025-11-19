@@ -23,48 +23,53 @@ speedtest:
   allow_failure: true
   script:
     - |
+      parse() { awk '/^Average:/ {for(i=2;i<=NF;i++) if($i ~ /^[0-9.]+$/) {print $i; exit}}' "$1"; }
+      parse2() { awk '/^Average:/ {count++; if(count==2) {for(i=2;i<=NF;i++) if($i ~ /^[0-9.]+$/) {print $i; exit}}}' "$1"; }
+      ratio() { awk -v a="$1" -v b="$2" 'BEGIN {if(b>0) printf "%.2f", a/b}'; }
+
       if [ "$CI_PIPELINE_SOURCE" = "merge_request_event" ]; then
-        MR_BRANCH="$CI_COMMIT_REF_NAME"
-        make clean && make && make benchmark | tee mr_benchmark.txt
-        MR_TRI=$(awk '/^Average:/ {for(i=2;i<=NF;i++) if($i ~ /^[0-9.]+$/) {print $i; exit}}' mr_benchmark.txt)
-        MR_EDGE=$(awk '/^Average:/ {count++; if(count==2) {for(i=2;i<=NF;i++) if($i ~ /^[0-9.]+$/) {print $i; exit}}}' mr_benchmark.txt)
+        make clean && make && make benchmark | tee curr.txt
+        CURR_TRI=$(parse curr.txt); CURR_EDGE=$(parse2 curr.txt)
+
         git fetch origin $CI_MERGE_REQUEST_TARGET_BRANCH_NAME
         git checkout origin/$CI_MERGE_REQUEST_TARGET_BRANCH_NAME
-        make clean && make && make benchmark | tee master_benchmark.txt
-        MASTER_TRI=$(awk '/^Average:/ {for(i=2;i<=NF;i++) if($i ~ /^[0-9.]+$/) {print $i; exit}}' master_benchmark.txt)
-        MASTER_EDGE=$(awk '/^Average:/ {count++; if(count==2) {for(i=2;i<=NF;i++) if($i ~ /^[0-9.]+$/) {print $i; exit}}}' master_benchmark.txt)
-        # Compare results (higher is better)
-        echo "Triangles - MR: $MR_TRI, master: $MASTER_TRI"
-        echo "Edges - MR: $MR_EDGE, master: $MASTER_EDGE"
-        TRI_OK=$(awk -v mr="$MR_TRI" -v master="$MASTER_TRI" 'BEGIN { if (mr >= 0.9 * master) print 1; else print 0 }')
-        EDGE_OK=$(awk -v mr="$MR_EDGE" -v master="$MASTER_EDGE" 'BEGIN { if (mr >= 0.9 * master) print 1; else print 0 }')
+        make clean && make && make benchmark | tee base.txt
+        BASE_TRI=$(parse base.txt); BASE_EDGE=$(parse2 base.txt)
+
+        echo "Triangles: $CURR_TRI vs $BASE_TRI ($(ratio $CURR_TRI $BASE_TRI)x)"
+        echo "Edges: $CURR_EDGE vs $BASE_EDGE ($(ratio $CURR_EDGE $BASE_EDGE)x)"
+
+        TRI_OK=$(awk -v c="$CURR_TRI" -v b="$BASE_TRI" 'BEGIN {print (c>=0.9*b)?1:0}')
+        EDGE_OK=$(awk -v c="$CURR_EDGE" -v b="$BASE_EDGE" 'BEGIN {print (c>=0.9*b)?1:0}')
+
         if [ "$TRI_OK" = "1" ] && [ "$EDGE_OK" = "1" ]; then
-          echo "Both benchmarks passed!"
-          exit 0
+          echo "✓ Both benchmarks passed"; exit 0
         else
-          [ "$TRI_OK" = "0" ] && echo "Triangle benchmark failed: $MR_TRI < 0.9 * $MASTER_TRI"
-          [ "$EDGE_OK" = "0" ] && echo "Edge benchmark failed: $MR_EDGE < 0.9 * $MASTER_EDGE"
+          [ "$TRI_OK" = "0" ] && echo "✗ Triangle: $CURR_TRI < 90% of $BASE_TRI"
+          [ "$EDGE_OK" = "0" ] && echo "✗ Edge: $CURR_EDGE < 90% of $BASE_EDGE"
           exit 1
         fi
       else
-        make clean && make && make benchmark | tee current_benchmark.txt
-        CURR_TRI=$(awk '/^Average:/ {for(i=2;i<=NF;i++) if($i ~ /^[0-9.]+$/) {print $i; exit}}' current_benchmark.txt)
-        CURR_EDGE=$(awk '/^Average:/ {count++; if(count==2) {for(i=2;i<=NF;i++) if($i ~ /^[0-9.]+$/) {print $i; exit}}}' current_benchmark.txt)
-        git fetch origin master
-        git checkout origin/master
-        make clean && make && make benchmark | tee master_benchmark.txt
-        MASTER_TRI=$(awk '/^Average:/ {for(i=2;i<=NF;i++) if($i ~ /^[0-9.]+$/) {print $i; exit}}' master_benchmark.txt)
-        MASTER_EDGE=$(awk '/^Average:/ {count++; if(count==2) {for(i=2;i<=NF;i++) if($i ~ /^[0-9.]+$/) {print $i; exit}}}' master_benchmark.txt)
-        echo "Triangles - Current: $CURR_TRI, Master: $MASTER_TRI"
-        echo "Edges - Current: $CURR_EDGE, Master: $MASTER_EDGE"
-        # Report comparison but always pass for non-MR
-        if [ -n "$MASTER_TRI" ] && [ -n "$CURR_TRI" ]; then
-          TRI_RATIO=$(awk -v curr="$CURR_TRI" -v master="$MASTER_TRI" 'BEGIN { printf "%.2f", curr/master }')
-          echo "Triangle speedup: ${TRI_RATIO}x"
-        fi
-        if [ -n "$MASTER_EDGE" ] && [ -n "$CURR_EDGE" ]; then
-          EDGE_RATIO=$(awk -v curr="$CURR_EDGE" -v master="$MASTER_EDGE" 'BEGIN { printf "%.2f", curr/master }')
-          echo "Edge speedup: ${EDGE_RATIO}x"
+        BRANCH=$(git rev-parse --abbrev-ref HEAD)
+        make clean && make && make benchmark | tee curr.txt
+        CURR_TRI=$(parse curr.txt); CURR_EDGE=$(parse2 curr.txt)
+
+        git fetch origin && git checkout HEAD^
+        make clean && make && make benchmark | tee prev.txt
+        PREV_TRI=$(parse prev.txt); PREV_EDGE=$(parse2 prev.txt)
+
+        echo "=== vs Previous ==="
+        echo "Triangles: $CURR_TRI vs $PREV_TRI ($(ratio $CURR_TRI $PREV_TRI)x)"
+        echo "Edges: $CURR_EDGE vs $PREV_EDGE ($(ratio $CURR_EDGE $PREV_EDGE)x)"
+
+        if [ "$BRANCH" != "master" ]; then
+          git checkout origin/master
+          make clean && make && make benchmark | tee master.txt
+          MASTER_TRI=$(parse master.txt); MASTER_EDGE=$(parse2 master.txt)
+          echo ""
+          echo "=== vs Master ==="
+          echo "Triangles: $CURR_TRI vs $MASTER_TRI ($(ratio $CURR_TRI $MASTER_TRI)x)"
+          echo "Edges: $CURR_EDGE vs $MASTER_EDGE ($(ratio $CURR_EDGE $MASTER_EDGE)x)"
         fi
         exit 0
       fi
