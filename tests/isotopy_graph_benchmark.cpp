@@ -13,6 +13,33 @@
 #include <iostream>
 #include <functional>
 
+namespace {
+
+template <typename Fn>
+double throughput_benchmark(const std::string& label, Fn&& fn, int seconds = 10, int runs = 3) {
+  using clock = std::chrono::steady_clock;
+  long long total = 0;
+  for (int i = 0; i < runs; ++i) {
+    auto start = clock::now();
+    long long count = 0;
+    while (std::chrono::duration_cast<std::chrono::seconds>(clock::now() - start).count() < seconds) {
+      fn();
+      ++count;
+    }
+    std::cout << "Run " << (i + 1) << ": Completed " << label << " " << count
+              << " times in " << seconds << " seconds.\n";
+    total += count;
+  }
+  double per_second = static_cast<double>(total) / (runs * seconds);
+  std::cout << "Average: Completed " << label << " " << per_second
+            << " times per second (over " << runs << " runs of "
+            << seconds << " seconds).\n";
+  std::cout << "METRIC " << label << " " << per_second << "\n";
+  return per_second;
+}
+
+}  // namespace
+
 TEST_CASE("Benchmark Sebastian's example", "[isotopy_graph]") {
   int delta = 6;
   std::vector<bool> sign {0,0,1,0,1,0,1,0,0,1,1,1,1,1,1,0,0,1,0,1,0,1,1,1,1,0,1,1};
@@ -116,22 +143,11 @@ TEST_CASE("Benchmark single case from YAML for 10 seconds (triangles, averaged o
   std::vector<bool> signs_vec = node.at("polarisation").get_value<std::vector<bool>>();
   std::set<std::set<int>> triangulation_vec = node.at("triangulation").get_value<std::set<std::set<int>>>();
 
-  using clock = std::chrono::steady_clock;
-  int total_count = 0;
-  int runs = 3;
-  for (int i = 0; i < runs; ++i) {
-    auto start = clock::now();
-    int count = 0;
-    while (std::chrono::duration_cast<std::chrono::seconds>(clock::now() - start).count() < 10) {
-      Isotopy::Graph graph(delta, signs_vec, triangulation_vec);
-      volatile std::string viro = graph.viro_notation();
-      ++count;
-    }
-    std::cout << "Run " << (i + 1) << ": Computed isotopy_type " << count << " times in 10 seconds.\n";
-    total_count += count;
-  }
-  double average = static_cast<double>(total_count) / runs;
-  std::cout << "Average: Computed isotopy_type " << average << " times in 10 seconds (over " << runs << " runs).\n";
+  throughput_benchmark("triangles_dense", [&]() {
+    Isotopy::Graph graph(delta, signs_vec, triangulation_vec);
+    volatile std::string viro = graph.viro_notation();
+    (void)viro;
+  });
 }
 
 TEST_CASE("Benchmark single case from YAML for 10 seconds (edges, averaged over 3 runs)", "[isotopy_graph][yaml][timing][edges]") {
@@ -145,22 +161,11 @@ TEST_CASE("Benchmark single case from YAML for 10 seconds (edges, averaged over 
   std::vector<bool> signs_vec = node.at("polarisation").get_value<std::vector<bool>>();
   std::vector<std::pair<int, int>> edges_vec = node.at("edges").get_value<std::vector<std::pair<int, int>>>();
 
-  using clock = std::chrono::steady_clock;
-  int total_count = 0;
-  int runs = 3;
-  for (int i = 0; i < runs; ++i) {
-    auto start = clock::now();
-    int count = 0;
-    while (std::chrono::duration_cast<std::chrono::seconds>(clock::now() - start).count() < 10) {
-      Isotopy::Graph graph(delta, signs_vec, edges_vec);
-      volatile std::string viro = graph.viro_notation();
-      ++count;
-    }
-    std::cout << "Run " << (i + 1) << ": Computed isotopy_type " << count << " times in 10 seconds.\n";
-    total_count += count;
-  }
-  double average = static_cast<double>(total_count) / runs;
-  std::cout << "Average: Computed isotopy_type " << average << " times in 10 seconds (over " << runs << " runs).\n";
+  throughput_benchmark("edges_dense", [&]() {
+    Isotopy::Graph graph(delta, signs_vec, edges_vec);
+    volatile std::string viro = graph.viro_notation();
+    (void)viro;
+  });
 }
 
 TEST_CASE("Benchmark sparse case from YAML for 10 seconds (triangles, averaged over 3 runs)", "[isotopy_graph][yaml][timing][triangles][sparse]") {
@@ -177,22 +182,11 @@ TEST_CASE("Benchmark sparse case from YAML for 10 seconds (triangles, averaged o
   std::vector<bool> signs_vec = node.at("polarisation").get_value<std::vector<bool>>();
   std::set<std::set<int>> triangulation_vec = node.at("triangulation").get_value<std::set<std::set<int>>>();
 
-  using clock = std::chrono::steady_clock;
-  int total_count = 0;
-  int runs = 3;
-  for (int i = 0; i < runs; ++i) {
-    auto start = clock::now();
-    int count = 0;
-    while (std::chrono::duration_cast<std::chrono::seconds>(clock::now() - start).count() < 10) {
-      Isotopy::Graph graph(delta, signs_vec, triangulation_vec);
-      volatile std::string viro = graph.viro_notation();
-      ++count;
-    }
-    std::cout << "Run " << (i + 1) << ": Computed isotopy_type " << count << " times in 10 seconds.\n";
-    total_count += count;
-  }
-  double average = static_cast<double>(total_count) / runs;
-  std::cout << "Average: Computed isotopy_type " << average << " times in 10 seconds (over " << runs << " runs).\n";
+  throughput_benchmark("triangles_sparse", [&]() {
+    Isotopy::Graph graph(delta, signs_vec, triangulation_vec);
+    volatile std::string viro = graph.viro_notation();
+    (void)viro;
+  });
 }
 
 TEST_CASE("Benchmark sparse case from YAML for 10 seconds (edges, averaged over 3 runs)", "[isotopy_graph][yaml][timing][edges][sparse]") {
@@ -209,22 +203,11 @@ TEST_CASE("Benchmark sparse case from YAML for 10 seconds (edges, averaged over 
   std::vector<bool> signs_vec = node.at("polarisation").get_value<std::vector<bool>>();
   std::vector<std::pair<int, int>> edges_vec = node.at("edges").get_value<std::vector<std::pair<int, int>>>();
 
-  using clock = std::chrono::steady_clock;
-  int total_count = 0;
-  int runs = 3;
-  for (int i = 0; i < runs; ++i) {
-    auto start = clock::now();
-    int count = 0;
-    while (std::chrono::duration_cast<std::chrono::seconds>(clock::now() - start).count() < 10) {
-      Isotopy::Graph graph(delta, signs_vec, edges_vec);
-      volatile std::string viro = graph.viro_notation();
-      ++count;
-    }
-    std::cout << "Run " << (i + 1) << ": Computed isotopy_type " << count << " times in 10 seconds.\n";
-    total_count += count;
-  }
-  double average = static_cast<double>(total_count) / runs;
-  std::cout << "Average: Computed isotopy_type " << average << " times in 10 seconds (over " << runs << " runs).\n";
+  throughput_benchmark("edges_sparse", [&]() {
+    Isotopy::Graph graph(delta, signs_vec, edges_vec);
+    volatile std::string viro = graph.viro_notation();
+    (void)viro;
+  });
 }
 
 TEST_CASE("Benchmark PCOM conversions", "[utils][pcom][benchmark]") {
@@ -267,6 +250,18 @@ TEST_CASE("Benchmark PCOM conversions", "[utils][pcom][benchmark]") {
   BENCHMARK("signs_and_triangles_to_pcom") {
     return Utils::signs_and_triangles_to_pcom(baseline.first, baseline.second, "benchmark").size();
   };
+
+  throughput_benchmark("pcom_parse", [&]() {
+    auto parsed = Utils::pcom_to_signs_and_triangles(sample_pcom);
+    volatile size_t sink = parsed.first.size() + parsed.second.size();
+    (void)sink;
+  });
+
+  throughput_benchmark("pcom_write", [&]() {
+    auto serialized = Utils::signs_and_triangles_to_pcom(baseline.first, baseline.second, "benchmark");
+    volatile size_t sink = serialized.size();
+    (void)sink;
+  });
 }
 
 
