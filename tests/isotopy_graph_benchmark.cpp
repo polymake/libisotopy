@@ -227,6 +227,48 @@ TEST_CASE("Benchmark sparse case from YAML for 10 seconds (edges, averaged over 
   std::cout << "Average: Computed isotopy_type " << average << " times in 10 seconds (over " << runs << " runs).\n";
 }
 
+TEST_CASE("Benchmark PCOM conversions", "[utils][pcom][benchmark]") {
+  static const std::string sample_pcom = R"({
+    "_ns": { "polymake": [ "https://polymake.org", "4.13" ] },
+    "_type": "tropical::Hypersurface<Min>",
+    "_id": "benchmark",
+    "_libisotopy_version": "2",
+    "_attrs": { "TYPE": { "attachment": true } },
+    "TYPE": "<13v1<6>v1<1>>",
+    "DUAL_SUBDIVISION": {
+      "MAXIMAL_CELLS": [
+        [0,9,10],[10,18,19],[20,27,28],[0,12,13],[0,13,14],[0,14,15],[0,15,16],[0,1,16],
+        [2,3,16],[1,2,16],[7,8,16],[6,7,16],[5,6,16],[4,5,16],[3,4,16],[9,10,17],[13,14,23],
+        [12,13,23],[0,10,20],[10,19,20],[28,29,34],[0,11,22],[11,21,22],[0,12,22],[12,22,23],
+        [15,16,23],[14,15,23],[10,17,24],[0,20,29],[0,11,29],[20,28,29],[18,19,25],[10,24,30],
+        [19,20,26],[22,23,29],[11,21,29],[21,22,29],[20,27,37],[27,28,33],[28,29,38],[10,30,35],
+        [19,25,31],[28,33,41],[20,26,32],[19,26,36],[20,37,43],[27,33,37],[20,32,43],[26,32,36],
+        [19,31,36],[28,38,41],[37,41,43],[33,37,41],[10,35,39],[32,36,40],[32,40,43],[10,39,42],
+        [10,42,44],[40,43,44],[36,40,44],[31,36,44],[25,31,44],[18,25,44],[10,18,44]
+      ],
+      "WEIGHTS": []
+    },
+    "PATCHWORK": [{
+      "_id": "benchmark#0",
+      "SIGNS": [
+        true,true,true,true,true,true,true,true,false,true,false,true,true,true,true,true,
+        true,true,true,true,true,true,true,false,true,false,true,true,true,true,true,true,true,true,false,true,true,true,true,true,false,false,true,true
+      ]
+    }]
+  })";
+
+  const auto baseline = Utils::pcom_to_signs_and_triangles(sample_pcom);
+
+  BENCHMARK("pcom_to_signs_and_triangles") {
+    auto parsed = Utils::pcom_to_signs_and_triangles(sample_pcom);
+    return parsed.first.size() + parsed.second.size();
+  };
+
+  BENCHMARK("signs_and_triangles_to_pcom") {
+    return Utils::signs_and_triangles_to_pcom(baseline.first, baseline.second, "benchmark").size();
+  };
+}
+
 
 /*
 TEST_CASE("Isotopy::Graph batch timing analysis from YAML file", "[isotopy_graph][yaml][timing]") {
