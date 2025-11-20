@@ -25,51 +25,63 @@ speedtest:
     - |
       parse() { awk '/^Average:/ {for(i=2;i<=NF;i++) if($i ~ /^[0-9.]+$/) {print $i; exit}}' "$1"; }
       parse2() { awk '/^Average:/ {count++; if(count==2) {for(i=2;i<=NF;i++) if($i ~ /^[0-9.]+$/) {print $i; exit}}}' "$1"; }
+      parse3() { awk '/^Average:/ {count++; if(count==3) {for(i=2;i<=NF;i++) if($i ~ /^[0-9.]+$/) {print $i; exit}}}' "$1"; }
+      parse4() { awk '/^Average:/ {count++; if(count==4) {for(i=2;i<=NF;i++) if($i ~ /^[0-9.]+$/) {print $i; exit}}}' "$1"; }
       ratio() { awk -v a="$1" -v b="$2" 'BEGIN {if(b>0) printf "%.2f", a/b}'; }
 
       if [ "$CI_PIPELINE_SOURCE" = "merge_request_event" ]; then
         make clean && make && make benchmark | tee curr.txt
-        CURR_TRI=$(parse curr.txt); CURR_EDGE=$(parse2 curr.txt)
+        CURR_TRI_DENSE=$(parse curr.txt); CURR_EDGE_DENSE=$(parse2 curr.txt); CURR_TRI_SPARSE=$(parse3 curr.txt); CURR_EDGE_SPARSE=$(parse4 curr.txt)
 
         git fetch origin $CI_MERGE_REQUEST_TARGET_BRANCH_NAME
         git checkout origin/$CI_MERGE_REQUEST_TARGET_BRANCH_NAME
         make clean && make && make benchmark | tee base.txt
-        BASE_TRI=$(parse base.txt); BASE_EDGE=$(parse2 base.txt)
+        BASE_TRI_DENSE=$(parse base.txt); BASE_EDGE_DENSE=$(parse2 base.txt); BASE_TRI_SPARSE=$(parse3 base.txt); BASE_EDGE_SPARSE=$(parse4 base.txt)
 
-        echo "Triangles: $CURR_TRI vs $BASE_TRI ($(ratio $CURR_TRI $BASE_TRI)x)"
-        echo "Edges: $CURR_EDGE vs $BASE_EDGE ($(ratio $CURR_EDGE $BASE_EDGE)x)"
+        echo "Triangles (dense): $CURR_TRI_DENSE vs $BASE_TRI_DENSE ($(ratio $CURR_TRI_DENSE $BASE_TRI_DENSE)x)"
+        echo "Edges (dense): $CURR_EDGE_DENSE vs $BASE_EDGE_DENSE ($(ratio $CURR_EDGE_DENSE $BASE_EDGE_DENSE)x)"
+        echo "Triangles (sparse): $CURR_TRI_SPARSE vs $BASE_TRI_SPARSE ($(ratio $CURR_TRI_SPARSE $BASE_TRI_SPARSE)x)"
+        echo "Edges (sparse): $CURR_EDGE_SPARSE vs $BASE_EDGE_SPARSE ($(ratio $CURR_EDGE_SPARSE $BASE_EDGE_SPARSE)x)"
 
-        TRI_OK=$(awk -v c="$CURR_TRI" -v b="$BASE_TRI" 'BEGIN {print (c>=0.9*b)?1:0}')
-        EDGE_OK=$(awk -v c="$CURR_EDGE" -v b="$BASE_EDGE" 'BEGIN {print (c>=0.9*b)?1:0}')
+        TRI_DENSE_OK=$(awk -v c="$CURR_TRI_DENSE" -v b="$BASE_TRI_DENSE" 'BEGIN {print (c>=0.9*b)?1:0}')
+        EDGE_DENSE_OK=$(awk -v c="$CURR_EDGE_DENSE" -v b="$BASE_EDGE_DENSE" 'BEGIN {print (c>=0.9*b)?1:0}')
+        TRI_SPARSE_OK=$(awk -v c="$CURR_TRI_SPARSE" -v b="$BASE_TRI_SPARSE" 'BEGIN {print (c>=0.9*b)?1:0}')
+        EDGE_SPARSE_OK=$(awk -v c="$CURR_EDGE_SPARSE" -v b="$BASE_EDGE_SPARSE" 'BEGIN {print (c>=0.9*b)?1:0}')
 
-        if [ "$TRI_OK" = "1" ] && [ "$EDGE_OK" = "1" ]; then
-          echo "✓ Both benchmarks passed"; exit 0
+        if [ "$TRI_DENSE_OK" = "1" ] && [ "$EDGE_DENSE_OK" = "1" ] && [ "$TRI_SPARSE_OK" = "1" ] && [ "$EDGE_SPARSE_OK" = "1" ]; then
+          echo "✓ All benchmarks passed"; exit 0
         else
-          [ "$TRI_OK" = "0" ] && echo "✗ Triangle: $CURR_TRI < 90% of $BASE_TRI"
-          [ "$EDGE_OK" = "0" ] && echo "✗ Edge: $CURR_EDGE < 90% of $BASE_EDGE"
+          [ "$TRI_DENSE_OK" = "0" ] && echo "✗ Dense Triangles: $CURR_TRI_DENSE < 90% of $BASE_TRI_DENSE"
+          [ "$EDGE_DENSE_OK" = "0" ] && echo "✗ Dense Edges: $CURR_EDGE_DENSE < 90% of $BASE_EDGE_DENSE"
+          [ "$TRI_SPARSE_OK" = "0" ] && echo "✗ Sparse Triangles: $CURR_TRI_SPARSE < 90% of $BASE_TRI_SPARSE"
+          [ "$EDGE_SPARSE_OK" = "0" ] && echo "✗ Sparse Edges: $CURR_EDGE_SPARSE < 90% of $BASE_EDGE_SPARSE"
           exit 1
         fi
       else
         BRANCH=$(git rev-parse --abbrev-ref HEAD)
         make clean && make && make benchmark | tee curr.txt
-        CURR_TRI=$(parse curr.txt); CURR_EDGE=$(parse2 curr.txt)
+        CURR_TRI_DENSE=$(parse curr.txt); CURR_EDGE_DENSE=$(parse2 curr.txt); CURR_TRI_SPARSE=$(parse3 curr.txt); CURR_EDGE_SPARSE=$(parse4 curr.txt)
 
         git fetch origin && git checkout HEAD^
         make clean && make && make benchmark | tee prev.txt
-        PREV_TRI=$(parse prev.txt); PREV_EDGE=$(parse2 prev.txt)
+        PREV_TRI_DENSE=$(parse prev.txt); PREV_EDGE_DENSE=$(parse2 prev.txt); PREV_TRI_SPARSE=$(parse3 prev.txt); PREV_EDGE_SPARSE=$(parse4 prev.txt)
 
         echo "=== vs Previous ==="
-        echo "Triangles: $CURR_TRI vs $PREV_TRI ($(ratio $CURR_TRI $PREV_TRI)x)"
-        echo "Edges: $CURR_EDGE vs $PREV_EDGE ($(ratio $CURR_EDGE $PREV_EDGE)x)"
+        echo "Triangles (dense): $CURR_TRI_DENSE vs $PREV_TRI_DENSE ($(ratio $CURR_TRI_DENSE $PREV_TRI_DENSE)x)"
+        echo "Edges (dense): $CURR_EDGE_DENSE vs $PREV_EDGE_DENSE ($(ratio $CURR_EDGE_DENSE $PREV_EDGE_DENSE)x)"
+        echo "Triangles (sparse): $CURR_TRI_SPARSE vs $PREV_TRI_SPARSE ($(ratio $CURR_TRI_SPARSE $PREV_TRI_SPARSE)x)"
+        echo "Edges (sparse): $CURR_EDGE_SPARSE vs $PREV_EDGE_SPARSE ($(ratio $CURR_EDGE_SPARSE $PREV_EDGE_SPARSE)x)"
 
         if [ "$BRANCH" != "master" ]; then
           git checkout origin/master
           make clean && make && make benchmark | tee master.txt
-          MASTER_TRI=$(parse master.txt); MASTER_EDGE=$(parse2 master.txt)
+          MASTER_TRI_DENSE=$(parse master.txt); MASTER_EDGE_DENSE=$(parse2 master.txt); MASTER_TRI_SPARSE=$(parse3 master.txt); MASTER_EDGE_SPARSE=$(parse4 master.txt)
           echo ""
           echo "=== vs Master ==="
-          echo "Triangles: $CURR_TRI vs $MASTER_TRI ($(ratio $CURR_TRI $MASTER_TRI)x)"
-          echo "Edges: $CURR_EDGE vs $MASTER_EDGE ($(ratio $CURR_EDGE $MASTER_EDGE)x)"
+          echo "Triangles (dense): $CURR_TRI_DENSE vs $MASTER_TRI_DENSE ($(ratio $CURR_TRI_DENSE $MASTER_TRI_DENSE)x)"
+          echo "Edges (dense): $CURR_EDGE_DENSE vs $MASTER_EDGE_DENSE ($(ratio $CURR_EDGE_DENSE $MASTER_EDGE_DENSE)x)"
+          echo "Triangles (sparse): $CURR_TRI_SPARSE vs $MASTER_TRI_SPARSE ($(ratio $CURR_TRI_SPARSE $MASTER_TRI_SPARSE)x)"
+          echo "Edges (sparse): $CURR_EDGE_SPARSE vs $MASTER_EDGE_SPARSE ($(ratio $CURR_EDGE_SPARSE $MASTER_EDGE_SPARSE)x)"
         fi
         exit 0
       fi

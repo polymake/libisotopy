@@ -36,7 +36,7 @@ TEST_CASE("Benchmark specific cases from YAML (triangles)", "[isotopy_graph][yam
   std::string yaml((std::istreambuf_iterator<char>(ifs)), std::istreambuf_iterator<char>());
   auto doc = fkyaml::node::deserialize(yaml);
 
-  std::vector<int> case_numbers = {1358, 1351};
+  std::vector<int> case_numbers = {21, 1358, 1351};
   for (int case_num : case_numbers) {
     if (case_num - 1 < 0 || static_cast<size_t>(case_num - 1) >= doc.size()) continue;
     auto& node = doc[case_num - 1];
@@ -73,7 +73,7 @@ TEST_CASE("Benchmark specific cases from YAML (edges)", "[isotopy_graph][yaml][s
   std::string yaml((std::istreambuf_iterator<char>(ifs)), std::istreambuf_iterator<char>());
   auto doc = fkyaml::node::deserialize(yaml);
 
-  std::vector<int> case_numbers = {1358, 1351};
+  std::vector<int> case_numbers = {21, 1358, 1351};
   for (int case_num : case_numbers) {
     if (case_num - 1 < 0 || static_cast<size_t>(case_num - 1) >= doc.size()) continue;
     auto& node = doc[case_num - 1];
@@ -140,6 +140,70 @@ TEST_CASE("Benchmark single case from YAML for 10 seconds (edges, averaged over 
   auto doc = fkyaml::node::deserialize(yaml);
 
   int case_num = 1358;
+  auto& node = doc[case_num - 1];
+  int delta = node.at("degree").get_value<int>();
+  std::vector<bool> signs_vec = node.at("polarisation").get_value<std::vector<bool>>();
+  std::vector<std::pair<int, int>> edges_vec = node.at("edges").get_value<std::vector<std::pair<int, int>>>();
+
+  using clock = std::chrono::steady_clock;
+  int total_count = 0;
+  int runs = 3;
+  for (int i = 0; i < runs; ++i) {
+    auto start = clock::now();
+    int count = 0;
+    while (std::chrono::duration_cast<std::chrono::seconds>(clock::now() - start).count() < 10) {
+      Isotopy::Graph graph(delta, signs_vec, edges_vec);
+      volatile std::string viro = graph.viro_notation();
+      ++count;
+    }
+    std::cout << "Run " << (i + 1) << ": Computed isotopy_type " << count << " times in 10 seconds.\n";
+    total_count += count;
+  }
+  double average = static_cast<double>(total_count) / runs;
+  std::cout << "Average: Computed isotopy_type " << average << " times in 10 seconds (over " << runs << " runs).\n";
+}
+
+TEST_CASE("Benchmark sparse case from YAML for 10 seconds (triangles, averaged over 3 runs)", "[isotopy_graph][yaml][timing][triangles][sparse]") {
+  std::ifstream ifs("tests/isotopy_tests.yaml");
+  std::string yaml((std::istreambuf_iterator<char>(ifs)), std::istreambuf_iterator<char>());
+  auto doc = fkyaml::node::deserialize(yaml);
+
+  int case_num = 21;
+  if (case_num - 1 < 0 || static_cast<size_t>(case_num - 1) >= doc.size()) {
+    FAIL("Sparse benchmark case not found in YAML");
+  }
+  auto& node = doc[case_num - 1];
+  int delta = node.at("degree").get_value<int>();
+  std::vector<bool> signs_vec = node.at("polarisation").get_value<std::vector<bool>>();
+  std::set<std::set<int>> triangulation_vec = node.at("triangulation").get_value<std::set<std::set<int>>>();
+
+  using clock = std::chrono::steady_clock;
+  int total_count = 0;
+  int runs = 3;
+  for (int i = 0; i < runs; ++i) {
+    auto start = clock::now();
+    int count = 0;
+    while (std::chrono::duration_cast<std::chrono::seconds>(clock::now() - start).count() < 10) {
+      Isotopy::Graph graph(delta, signs_vec, triangulation_vec);
+      volatile std::string viro = graph.viro_notation();
+      ++count;
+    }
+    std::cout << "Run " << (i + 1) << ": Computed isotopy_type " << count << " times in 10 seconds.\n";
+    total_count += count;
+  }
+  double average = static_cast<double>(total_count) / runs;
+  std::cout << "Average: Computed isotopy_type " << average << " times in 10 seconds (over " << runs << " runs).\n";
+}
+
+TEST_CASE("Benchmark sparse case from YAML for 10 seconds (edges, averaged over 3 runs)", "[isotopy_graph][yaml][timing][edges][sparse]") {
+  std::ifstream ifs("tests/isotopy_tests.yaml");
+  std::string yaml((std::istreambuf_iterator<char>(ifs)), std::istreambuf_iterator<char>());
+  auto doc = fkyaml::node::deserialize(yaml);
+
+  int case_num = 21;
+  if (case_num - 1 < 0 || static_cast<size_t>(case_num - 1) >= doc.size()) {
+    FAIL("Sparse benchmark case not found in YAML");
+  }
   auto& node = doc[case_num - 1];
   int delta = node.at("degree").get_value<int>();
   std::vector<bool> signs_vec = node.at("polarisation").get_value<std::vector<bool>>();
