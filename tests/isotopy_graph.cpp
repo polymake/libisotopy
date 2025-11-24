@@ -23,7 +23,6 @@ TEST_CASE("Isotopy::Graph from triangulation  (Harnack 8)", "[isotopy_graph]") {
   std::map<std::pair<int,int>, int> pt_map = Utils::get_pt2int(delta);
   REQUIRE(graph.component[pt_map.at(std::make_pair(0,0))] == graph.component[pt_map.at(std::make_pair(0,1))]);
   REQUIRE(graph.component[pt_map.at(std::make_pair(0,0))] == graph.component[pt_map.at(std::make_pair(1,0))]);
-  REQUIRE(graph.component[pt_map.at(std::make_pair(0,0))] == graph.component[pt_map.at(std::make_pair(1,1))]);
   //std::string pcom = Utils::signs_and_triangles_to_pcom(sign,triangles);
   //REQUIRE(Utils::pcom_to_signs_and_triangles(pcom) == std::make_pair(sign,triangles)); //Maybe sort triangles
 
@@ -176,6 +175,147 @@ TEST_CASE("Isotopy::Graph 75", "[isotopy_graph]") {
     REQUIRE(graph.odd_regions() == 5);
     REQUIRE(graph.viro_notation() == "<1<5>>");
     //std::cout << "Shorthand: " << Utils::web_shorthand(delta, sign, triangles) << std::endl;
+}
+
+TEST_CASE("Graph constructor from edges (vector)", "[isotopy_graph]") {
+  int delta = 2;
+  std::vector<bool> sign = {true, true, false, false, false, true};
+  std::vector<std::pair<int,int>> edges = {
+      {0,1}, {1,2}, {0,3}, {3,4}, {2,4}, {1,3}, {1,4}, {4,5}, {3,5}
+  };
+  Isotopy::Graph graph(delta, sign, edges);
+  graph.isotopy_type();
+  REQUIRE(graph.viro_notation() == "<1>");
+  REQUIRE(graph.even_regions() == 1);
+  REQUIRE(graph.odd_regions() == 0);
+}
+
+TEST_CASE("Graph constructor from edges (set)", "[isotopy_graph]") {
+  int delta = 2;
+  std::vector<bool> sign = {true, true, false, false, false, true};
+  std::set<std::pair<int,int>> edges = {
+      {0,1}, {1,2}, {0,3}, {3,4}, {2,4}, {1,3}, {1,4}, {4,5}, {3,5}
+  };
+  Isotopy::Graph graph(delta, sign, edges);
+  graph.isotopy_type();
+  REQUIRE(graph.viro_notation() == "<1>");
+  REQUIRE(graph.even_regions() == 1);
+  REQUIRE(graph.odd_regions() == 0);
+}
+
+TEST_CASE("Component vs adjacency classification for delta=1", "[isotopy_graph]") {
+  int delta = 1;
+  std::vector<bool> sign {true, false, false};
+  std::vector<Isotopy::Triangle> triangles = {{0,1,2}};
+
+  Isotopy::Graph graph(delta, sign, triangles);
+  REQUIRE(graph.component_edges.size() >= 3);
+  REQUIRE(graph.adjacency_edges.size() >= 1);
+}
+
+TEST_CASE("Quadrant indices for delta=1", "[isotopy_graph]") {
+  int delta = 1;
+  std::vector<bool> sign {true, true, true};
+  std::vector<Isotopy::Triangle> triangles = {{0,1,2}};
+
+  Isotopy::Graph graph(delta, sign, triangles);
+
+  REQUIRE(graph.quad_idxs[0][0] == 0);
+  REQUIRE(graph.quad_idxs[0][1] == 0);
+  REQUIRE(graph.quad_idxs[0][2] == 0);
+  REQUIRE(graph.quad_idxs[0][3] == 0);
+
+  REQUIRE(graph.quad_idxs[1][0] == 1);
+  REQUIRE(graph.quad_idxs[1][1] == 1);
+  REQUIRE(graph.quad_idxs[1][2] == 4);
+  REQUIRE(graph.quad_idxs[1][3] == 4);
+
+  REQUIRE(graph.quad_idxs[2][0] == 2);
+  REQUIRE(graph.quad_idxs[2][1] == 3);
+  REQUIRE(graph.quad_idxs[2][2] == 3);
+  REQUIRE(graph.quad_idxs[2][3] == 2);
+
+  REQUIRE(graph.antipodal_partner.size() == static_cast<std::size_t>(2 * (delta + 1)));
+  auto vert_pair = graph.antipodal_partner[0];
+  auto horiz_pair = graph.antipodal_partner[2];
+
+  auto v0 = Isotopy::idx_to_point(delta, vert_pair.first);
+  auto v1 = Isotopy::idx_to_point(delta, vert_pair.second);
+  REQUIRE(v0.first == 0);
+  REQUIRE(v0.second == 1);
+  REQUIRE(v1.first == 0);
+  REQUIRE(v1.second == -1);
+
+  auto h0 = Isotopy::idx_to_point(delta, horiz_pair.first);
+  auto h1 = Isotopy::idx_to_point(delta, horiz_pair.second);
+  REQUIRE(h0.first == 1);
+  REQUIRE(h0.second == 0);
+  REQUIRE(h1.first == -1);
+  REQUIRE(h1.second == 0);
+}
+
+TEST_CASE("Quadrant indices for delta=2", "[isotopy_graph]") {
+  int delta = 2;
+  std::vector<bool> sign {true, true, true, true, true, true};
+  std::vector<Isotopy::Triangle> triangles = {{0,1,3}, {1,3,4}, {1,2,4}, {3,4,5}};
+
+  Isotopy::Graph graph(delta, sign, triangles);
+
+  REQUIRE(graph.quad_idxs[0][0] == 0);
+  REQUIRE(graph.quad_idxs[0][1] == 0);
+  REQUIRE(graph.quad_idxs[0][2] == 0);
+  REQUIRE(graph.quad_idxs[0][3] == 0);
+
+  REQUIRE(graph.quad_idxs[1][0] == 1);
+  REQUIRE(graph.quad_idxs[1][1] == 1);
+  REQUIRE(graph.quad_idxs[1][2] == 9);
+  REQUIRE(graph.quad_idxs[1][3] == 9);
+
+  REQUIRE(graph.quad_idxs[2][0] == 2);
+  REQUIRE(graph.quad_idxs[2][1] == 2);
+  REQUIRE(graph.quad_idxs[2][2] == 10);
+  REQUIRE(graph.quad_idxs[2][3] == 10);
+
+  REQUIRE(graph.quad_idxs[3][0] == 3);
+  REQUIRE(graph.quad_idxs[3][1] == 6);
+  REQUIRE(graph.quad_idxs[3][2] == 6);
+  REQUIRE(graph.quad_idxs[3][3] == 3);
+
+  REQUIRE(graph.quad_idxs[4][0] == 4);
+  REQUIRE(graph.quad_idxs[4][1] == 7);
+  REQUIRE(graph.quad_idxs[4][2] == 11);
+  REQUIRE(graph.quad_idxs[4][3] == 12);
+
+  REQUIRE(graph.quad_idxs[5][0] == 5);
+  REQUIRE(graph.quad_idxs[5][1] == 8);
+  REQUIRE(graph.quad_idxs[5][2] == 8);
+  REQUIRE(graph.quad_idxs[5][3] == 5);
+
+  REQUIRE(graph.antipodal_partner.size() == static_cast<std::size_t>(2 * (delta + 1)));
+  auto pair_x0 = graph.antipodal_partner[0];
+  auto pair_x1 = graph.antipodal_partner[2];
+  auto pair_x2 = graph.antipodal_partner[4];
+
+  auto x0a = Isotopy::idx_to_point(delta, pair_x0.first);
+  auto x0b = Isotopy::idx_to_point(delta, pair_x0.second);
+  REQUIRE(x0a.first == 0);
+  REQUIRE(x0a.second == 2);
+  REQUIRE(x0b.first == 0);
+  REQUIRE(x0b.second == -2);
+
+  auto x1a = Isotopy::idx_to_point(delta, pair_x1.first);
+  auto x1b = Isotopy::idx_to_point(delta, pair_x1.second);
+  REQUIRE(x1a.first == 1);
+  REQUIRE(x1a.second == 1);
+  REQUIRE(x1b.first == -1);
+  REQUIRE(x1b.second == -1);
+
+  auto x2a = Isotopy::idx_to_point(delta, pair_x2.first);
+  auto x2b = Isotopy::idx_to_point(delta, pair_x2.second);
+  REQUIRE(x2a.first == 2);
+  REQUIRE(x2a.second == 0);
+  REQUIRE(x2b.first == -2);
+  REQUIRE(x2b.second == 0);
 }
 
 

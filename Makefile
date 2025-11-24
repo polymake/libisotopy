@@ -1,5 +1,5 @@
 CXX = g++
-CXXFLAGS = -std=c++11 -Wall -Wextra -O2 -Iinclude -fPIC
+CXXFLAGS = -std=c++20 -Wall -Wextra -O2 -Iinclude -fPIC
 SRC = src/isotopy_graph.cpp
 OBJ = obj/isotopy_graph.o
 TARGET = libisotopy.so

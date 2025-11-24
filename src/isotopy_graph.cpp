@@ -1,80 +1,210 @@
 #include "isotopy_graph.h"
-#include <cassert>
-#include <stdexcept>
 #include <algorithm>
-#include <iostream>
-#include <unordered_map>
+#include <cassert>
 #include <functional>
-#include <regex>
-#include <string>
+#include <iostream>
 #include <sstream>
+#include <stdexcept>
+#include <string>
+#include <cctype>
 
 //For the Utils
 #include <cstdint>
 
+// Using declarations for common std types to reduce verbosity
+using std::vector;
+using std::string;
+using std::pair;
+using std::array;
+using std::map;
+using std::set;
+using std::function;
+using std::sort;
+using std::unique;
+using std::swap;
+using std::make_pair;
+using std::to_string;
+
+// Regex types
+using std::stringstream;
+using std::getline;
+using std::stoi;
+
+// Exceptions
+using std::out_of_range;
+
 namespace Isotopy {
 
-Graph::Graph(int delta, const std::vector<bool>& sign_vector, const std::set<std::set<int>>& triangles) {
-  // Convert triangles to edges using the utility function
-  std::vector<std::pair<int, int>> edges = triangles_to_edges(delta, triangles);
-  *this = Graph(delta, sign_vector, edges);
-}
+void Graph::initialize(const vector<bool>& sign_vector) {
+  delta_even  = (delta % 2 == 0);
+  nverts      = num_vertices(delta);
+  ntotalverts = num_total_vertices(delta);
+  ntriangles  = num_triangles(delta);
 
-Graph::Graph(int delta, const std::vector<bool>& sign_vector, const std::set<std::pair<int, int>>& edges)
-: Graph(delta, sign_vector, std::vector<std::pair<int, int>>(edges.begin(), edges.end())) {}
+  assert(sign_vector.size() == static_cast<size_t>(nverts) && "sign vector length does not match number of vertices");
+  
+  int q2_offset = nverts;
+  int q3_offset = q2_offset + nverts - delta - 1;
+  int q4_offset = q3_offset + nverts - delta - 1;
 
+  polarisation = sign_vector;       // Copy Q1 signs
+  polarisation.resize(ntotalverts); // Extend for Q2-Q4
+  quad_idxs.resize(nverts);
+  antipodal_partner.resize(2 * (delta + 1));
 
-Graph::Graph(int delta, const std::vector<bool>&sign_vector, const std::vector<std::pair<int, int>>& edges)
-: delta(delta) {
-  size_t nverts = num_vertices(delta);
-  assert(sign_vector.size() == nverts && "sign vector length does not match number of vertices");
-
-  sign_complete.resize(4 * nverts);
-  edges_complete.reserve(4 * edges.size() + 4*(delta+1));
-  for (size_t i = 0; i < 4; ++i) {
-    for (const auto& edge : edges) {
-      edges_complete.push_back({edge.first + i * nverts, edge.second + i * nverts});
-    }
-  }
-
-  int offset = 0;
-  for (int i = 0; i < delta + 1; ++i) {
-    //Connects zero with third quadrant
-    edges_complete.push_back({i, i + 3* nverts});
-    //Connects first with second quadrant
-    edges_complete.push_back({i + 2 * nverts, i + nverts});
-    //Conects zero and first quadrant
-    edges_complete.push_back({offset, offset + nverts});
-    //Connects second and third quadrant
-    edges_complete.push_back({offset + 2*nverts, offset + 3*nverts});
-
-    offset += delta + 2 - (i+1);
-  }
-
-  side_points_complete.resize(4 * (delta+1));
-  int offset_side_pt = -1;
-  int side_points_index = 0;
-  //sign vector
-  int index = 0;
+  int idx = 0;
   for (int limit = delta; limit >= 0; --limit) {
-    //Assign side points
-    offset_side_pt += limit+1;
-    side_points_complete[side_points_index] = offset_side_pt;
-    side_points_complete[side_points_index + delta+1] = offset_side_pt + nverts;
-    side_points_complete[side_points_index + 2*(delta+1)] = offset_side_pt + 2*nverts;
-    side_points_complete[side_points_index + 3*(delta+1)] = offset_side_pt + 3*nverts;
+    int x = delta - limit;
 
-    side_points_index++;
     for (int y = 0; y <= limit; ++y) {
-      int x = delta - limit;
-      sign_complete[index] = sign_vector[index];
-      sign_complete[index + nverts] = (y % 2 == 0) ? sign_vector[index] : !sign_vector[index];
-      sign_complete[index + 2 * nverts] = (x % 2 == 0) ? (y % 2 == 0 ? sign_vector[index] : !sign_vector[index]) : (y % 2 == 0 ? !sign_vector[index] : sign_vector[index]);
-      sign_complete[index + 3 * nverts] = (x % 2 == 0) ? sign_vector[index] : !sign_vector[index];
-    ++index;
+      int q1_idx = idx;                                   // (+x, +y)
+      int q2_idx = q2_offset + idx - delta - 1;           // (-x, +y)
+      int q3_idx = q3_offset + idx - x - 1;               // (-x, -y)
+      int q4_idx = q4_offset + idx - delta - 1 - x;       // (+x, -y)
+
+      quad_idxs[idx][0] = q1_idx;
+
+      bool q1_sign = polarisation[idx];
+      bool q2_sign = (x % 2 == 0) ? q1_sign : !q1_sign;
+      bool q3_sign = ((x % 2) == (y % 2)) ? q1_sign : !q1_sign;
+      bool q4_sign = (y % 2 == 0) ? q1_sign : !q1_sign;
+
+      if (x == 0 && y == 0) {
+        quad_idxs[idx][1] = q1_idx;
+        quad_idxs[idx][2] = q1_idx;
+        quad_idxs[idx][3] = q1_idx;
+
+      } else if (x == 0) {
+        quad_idxs[idx][1] = q1_idx;
+        quad_idxs[idx][2] = q3_idx;
+        quad_idxs[idx][3] = q3_idx;
+
+        polarisation[q3_idx] = q3_sign;
+
+      } else if (y == 0) {
+        quad_idxs[idx][1] = q2_idx;
+        quad_idxs[idx][2] = q2_idx;
+        quad_idxs[idx][3] = q1_idx;
+
+        polarisation[q2_idx] = q2_sign;
+
+      } else {
+        quad_idxs[idx][1] = q2_idx;
+        quad_idxs[idx][2] = q3_idx;
+        quad_idxs[idx][3] = q4_idx;
+
+        polarisation[q2_idx] = q2_sign;
+        polarisation[q3_idx] = q3_sign;
+        polarisation[q4_idx] = q4_sign;
+
+      }
+
+      ++idx; // increment index
+    }
+
+    // Technically two duplicate edges in antipodal_partner
+    const array<int, 4>& aidxs = quad_idxs[idx - 1];
+    antipodal_partner[2 * x]     = {aidxs[0], aidxs[2]};  // Q1 ↔ Q3
+    antipodal_partner[2 * x + 1] = {aidxs[1], aidxs[3]};  // Q2 ↔ Q4
+  }
+
+  component_edges.reserve(4 * ntriangles);
+  adjacency_edges.reserve(4 * ntriangles);
+  parent.assign(ntotalverts, -1);
+  rank.assign(ntotalverts, 0);
+}
+
+Graph::Graph(int delta, const vector<bool>& sign_vector, const vector<Triangle>& triangles)
+  : delta(delta) {
+  initialize(sign_vector);
+
+  assert(triangles.size() == static_cast<size_t>(ntriangles) && "Triangulation must have delta^2 triangles");
+
+  for (const auto& [v0, v1, v2] : triangles) {
+    for (int q = 0; q < 4; ++q) {
+      int qv0 = quad_idxs[v0][q];
+      int qv1 = quad_idxs[v1][q];
+      int qv2 = quad_idxs[v2][q];
+
+      bool s0 = polarisation[qv0];
+      bool s1 = polarisation[qv1];
+      bool s2 = polarisation[qv2];
+
+      bool v0_eq_v1 = (s0 == s1);
+      bool v0_eq_v2 = (s0 == s2);
+      bool v1_eq_v2 = (s1 == s2);
+
+      // Check if triangle has mixed signs
+      bool has_mixed_signs = !v0_eq_v1 || !v0_eq_v2 || !v1_eq_v2;
+
+      if (has_mixed_signs) {
+        // Initialize parent for all involved vertices
+        if (parent[qv0] == -1) parent[qv0] = qv0;
+        if (parent[qv1] == -1) parent[qv1] = qv1;
+        if (parent[qv2] == -1) parent[qv2] = qv2;
+
+        if (v1_eq_v2) {
+          component_edges.push_back({qv1, qv2});
+          adjacency_edges.push_back({qv0, qv1});
+
+        } else if (v0_eq_v2) {
+          component_edges.push_back({qv0, qv2});
+          adjacency_edges.push_back({qv0, qv1});
+
+        } else if (v0_eq_v1) {
+          component_edges.push_back({qv0, qv1});
+          adjacency_edges.push_back({qv0, qv2});
+
+        } 
+      }
     }
   }
 }
+
+// Edge-based constructor
+Graph::Graph(int delta, const vector<bool>& sign_vector, const vector<Edge>& edges)
+  : delta(delta) {
+  initialize(sign_vector);
+
+  for (const auto& [v0, v1] : edges) {
+    for (int q = 0; q < 4; ++q) {
+      int qv0 = quad_idxs[v0][q];
+      int qv1 = quad_idxs[v1][q];
+
+      bool s0 = polarisation[qv0];
+      bool s1 = polarisation[qv1];
+
+      // Initialize parent for involved vertices
+      if (parent[qv0] == -1) parent[qv0] = qv0;
+      if (parent[qv1] == -1) parent[qv1] = qv1;
+
+      if (s0 == s1) {
+        // Same sign: component edge
+        component_edges.push_back({qv0, qv1});
+      } else {
+        // Different sign: adjacency edge
+        adjacency_edges.push_back({qv0, qv1});
+      }
+    }
+  }
+}
+
+// Backwards compatibility constructor: converts set<pair<int,int>> to vector<Edge>
+Graph::Graph(int delta, const vector<bool>& sign_vector, const set<pair<int, int>>& edges)
+: Graph(delta, sign_vector, vector<Edge>(edges.begin(), edges.end())) {}
+
+// Backwards compatibility constructor: converts set<set<int>> to vector<Triangle>
+Graph::Graph(int delta, const vector<bool>& sign_vector, const set<set<int>>& triangles)
+: Graph(delta, sign_vector, [&triangles]() {
+    vector<Triangle> tri_vec;
+    tri_vec.reserve(triangles.size());
+    for (const auto& tri_set : triangles) {
+      assert(tri_set.size() == 3 && "Each triangle must have exactly 3 vertices");
+      vector<int> tri_tmp(tri_set.begin(), tri_set.end());
+      tri_vec.push_back({tri_tmp[0], tri_tmp[1], tri_tmp[2]});
+    }
+    return tri_vec;
+  }()) {}
 
 void Graph::connected_components() {
   //If already computed return
@@ -82,245 +212,234 @@ void Graph::connected_components() {
     return;
   }
 
-  size_t nverts = num_vertices(delta);
-  int n = 4 * nverts;
-  parent.resize(n);
-  for (int i = 0; i < n; ++i) parent[i] = i;
-
-
-  // Union vertices with same sign along the edge, otherwise record adjacency
-  for (size_t i = 0; i < edges_complete.size(); ++i) {
-    int u = edges_complete[i].first;
-    int v = edges_complete[i].second;
-    if (sign_complete[u] == sign_complete[v]) {
-      unite(u, v);
-    }
+  // Parent already initialized in constructor, just do unions
+  for (const auto& [u, v] : component_edges) {
+    unite(parent, rank, u, v);
   }
 
-  //This is completely useless except for the fact, that it counts the components 
-  size_t component_count = 0;
-  std::unordered_map<int, int> root_to_component;
-  component.resize(n, -1);
-  for (int i = 0; i < n; ++i) {
-    int component_root_ptr = find(i);
-    if (root_to_component.find(component_root_ptr) == root_to_component.end()) {
-      root_to_component[component_root_ptr] = component_count++;
-    }
-    component[i] = root_to_component[component_root_ptr];
-  }
+  // Build component mapping in a single pass
+  component.assign(ntotalverts, -1);
+  ncomponents = 0;
 
-  // Build component adjacency
-  component_adjacency.clear();
-  component_adjacency.resize(component_count);
-  for (size_t i = 0; i < edges_complete.size(); ++i) {
-    int u = edges_complete[i].first;
-    int v = edges_complete[i].second;
-    int cu = component[u];
-    int cv = component[v];
-    if (cu != cv) {
-      component_adjacency[cu].insert(cv);
-      component_adjacency[cv].insert(cu);
-    }
-  }
-}
+  for (int i = 0; i < ntotalverts; ++i) {
+    if (parent[i] == -1) continue;  // Skip uninitialized vertices
 
-int Graph::isotopy_root() {
-  //if already done return
-  if (root != -1) {
-    return root;
-  }
-  if (component.empty()) {
-    connected_components();
-  }
+    int root = find(parent, i);
 
-  if (delta % 2 == 0) {
-
-    // Prepare for adjacency
-    std::unordered_map<int, bool> root_to_color;
-
-    int rootptr = -1; 
-    int nsidepoints = 4 * (delta+1); // total number of indices
-    for (size_t i = 0; i < side_points_complete.size(); ++i) {
-      int pt1 = side_points_complete[i];
-      int pt2 = side_points_complete[(i+2*(delta+1)) % nsidepoints];
-      int comp1 = find(pt1);
-      int comp2 = find(pt2);
-      if(comp1 == comp2) {
-        rootptr = comp1;
-        break; // Conflict found, exit loop
-      }
-      if (root_to_color.find(comp1) == root_to_color.end()) {
-        if (root_to_color.find(comp2) == root_to_color.end()) {
-          root_to_color[comp1] = true;
-          root_to_color[comp2] = false;
-        } else {
-          root_to_color[comp1] = !root_to_color[comp2];
-        }
-      } else {
-        if (root_to_color.find(comp2) == root_to_color.end()) {
-          root_to_color[comp2] = !root_to_color[comp1];
-        } else if ( root_to_color[comp2] == root_to_color[comp1]) {
-          rootptr = comp1; 
-        }
-      }
+    if (component[root] == -1) {
+      component[root] = ncomponents++;
     }
 
-    if (rootptr >= 0) {
-      root = component[rootptr];
-    }
-   } else {
-    calculate_regions();
-
-    //increment region + 1 since, border is one
-    region_count++;
-
-    root_region = -1;
-    for (size_t i = 0; i < component_adjacency.size(); ++i) {
-      for (int adj_comp : component_adjacency[i]) {
-        if (region[i] == region[adj_comp]) {
-          root_region = region[i];
-          root = i;
-          break;
-        }
-      }
-      if (root_region != -1) break;
-    }
+    component[i] = component[root];
   }
-  return root; 
-}
-
-void Graph::calculate_regions() {
-
-  // Build component_antipod_adjacency
-  std::vector<std::set<int>> component_antipode_adjacency(component_adjacency.size());
-  for (size_t i = 0; i < side_points_complete.size(); ++i) {
-    int comp = component[side_points_complete[i]];
-    int antipodal_comp = component[side_points_complete[(i + 2 * (delta+1)) % side_points_complete.size()]];
-    component_antipode_adjacency[comp].insert(antipodal_comp);
-  }
-
-  region.resize(component_adjacency.size(), -1);
-  region_count = 0;
-  for (size_t i = 0; i < region.size(); ++i) {
-    if (region[i] == -1) {
-      std::set<int> stack;
-      stack.insert(i);
-      while (!stack.empty()) {
-        int current = *stack.begin();
-        stack.erase(stack.begin());
-        region[current] = region_count;
-        for (int neighbor : component_antipode_adjacency[current]) {
-          if (region[neighbor] == -1) {
-            stack.insert(neighbor);
-          }
-        }
-      }
-      region_count++;
-    }
-  }
-
-
-  region_adjacency.resize(region_count, std::set<int>());
-  for (size_t i = 0; i < component_adjacency.size(); ++i) {
-    for (int adj_comp : component_adjacency[i]) {
-      region_adjacency[region[i]].insert(region[adj_comp]);
-    }
-  }
-
 }
 
 void Graph::isotopy_type() {
-  //If already done return
+  // If already done return
   if (p_regions != 0 && n_regions != -1) {
     return;
   }
 
-  if (root == -1) {
-    isotopy_root();
+  connected_components();
+
+  // Initialize region counters
+  // For odd degree, n_regions starts at 0 to account for border region at infinity
+  // For even degree, n_regions starts at -1 and first increment makes it 0
+  p_regions = 0;
+  n_regions = delta_even ? -1 : 0;
+
+  // Use union-find to merge antipodal components into regions
+  vector<int> region_parent(ncomponents);
+  for (int i = 0; i < ncomponents; ++i) region_parent[i] = i;
+
+  // Bipartiteness check using vector indexed by component IDs (only for even degree)
+  vector<int> comp_to_color;
+  if (delta_even) {
+    comp_to_color.assign(ncomponents, -1);  // -1 = unassigned, 0 = false, 1 = true
   }
 
-  if (delta % 2 == 0) {
-    calculate_regions();
+  // Process antipodal pairs: merge regions and check bipartiteness for even degree
+  if (delta_even) {
+    // Even degree: merge regions AND find root via bipartiteness check
+    for (const auto& [pt1, pt2] : antipodal_partner) {
+      if (parent[pt1] == -1 || parent[pt2] == -1) continue;
+
+      int root1 = find(parent, pt1);
+      int root2 = find(parent, pt2);
+      int comp1 = component[root1];
+      int comp2 = component[root2];
+
+      if (comp1 == comp2) {
+        // Antipodal pair in same component = conflict
+        if (root == -1) root = comp1;
+        continue;
+      }
+
+      unite(region_parent, comp1, comp2);
+
+      if (root == -1) {
+        int& c1 = comp_to_color[comp1];
+        int& c2 = comp_to_color[comp2];
+
+        if (c1 == -1 && c2 == -1) {
+          c1 = 1;
+          c2 = 0;
+        } else if (c1 == -1) {
+          c1 = 1 - c2;
+        } else if (c2 == -1) {
+          c2 = 1 - c1;
+        } else if (c1 == c2) {
+          // Both colored with same color = conflict (odd cycle)
+          root = comp1;
+        }
+      }
+    }
+  } else {
+    // Odd degree: only merge regions (root found later)
+    for (const auto& [pt1, pt2] : antipodal_partner) {
+      if (parent[pt1] == -1 || parent[pt2] == -1) continue;
+
+      int root1 = find(parent, pt1);
+      int root2 = find(parent, pt2);
+      int comp1 = component[root1];
+      int comp2 = component[root2];
+
+      if (comp1 != comp2) {
+        unite(region_parent, comp1, comp2);
+      }
+    }
   }
 
-  //Might cause issues in the future
+  // Assign region IDs
+  region.assign(ncomponents, -1);
+  region_count = 0;
+  for (int i = 0; i < ncomponents; ++i) {
+    int region_root = find(region_parent, i);
+    if (region[region_root] == -1) {
+      region[region_root] = region_count++;
+    }
+    region[i] = region[region_root];
+  }
+
+  // Build region adjacency directly from adjacency_edges
+  region_adjacency.clear();
+  region_adjacency.resize(region_count);
+
+  if (!delta_even && root == -1) {
+    // Odd degree with no root yet: find self-loop in region adjacency
+    for (const auto& [u, v] : adjacency_edges) {
+      int cu = component[u];
+      int cv = component[v];
+      if (cu != cv) {
+        int rcu = region[cu];
+        int rcv = region[cv];
+        region_adjacency[rcu].push_back(rcv);
+        region_adjacency[rcv].push_back(rcu);
+
+        if (rcu == rcv) {
+          root = cu;
+        }
+      }
+    }
+  } else {
+    // Even degree or root already found: just build adjacency
+    for (const auto& [u, v] : adjacency_edges) {
+      int cu = component[u];
+      int cv = component[v];
+      if (cu != cv) {
+        int rcu = region[cu];
+        int rcv = region[cv];
+        region_adjacency[rcu].push_back(rcv);
+        region_adjacency[rcv].push_back(rcu);
+      }
+    }
+  }
+
+  for (auto& nbrs : region_adjacency) {
+    sort(nbrs.begin(), nbrs.end());
+    nbrs.erase(unique(nbrs.begin(), nbrs.end()), nbrs.end());
+  }
+
+  if (!delta_even) {
+    // Increment region count by 1 for the border region
+    region_count++;
+  }
 
   root_region = region[root];
 
-  region_sign.resize(region_adjacency.size(), false);
+  // BFS to assign region signs (2-coloring of region adjacency graph)
+  region_sign.assign(region_count, false);
+  region_sign[root_region] = !delta_even;  // true for odd degree, false for even
 
-  std::set<std::pair<int, int>> edges;
+  vector<bool> visited(region_count, false);
+  visited[root_region] = true;
 
-  std::set<int> stack;
-  stack.insert(root_region);
-  if (delta % 2 != 0) {
-    region_sign[root_region] = true;
-    n_regions++;
-  } else {
-    region_sign[root_region] = false; 
-  }
+  vector<int> queue;
+  queue.reserve(region_count);
+  queue.push_back(root_region);
 
-  std::set<int> visited;
-  while (!stack.empty()) {
-    int current = *stack.begin();
-    stack.erase(stack.begin());
-    visited.insert(current);
+  for (size_t i = 0; i < queue.size(); ++i) {
+    int current = queue[i];
+
     if (region_sign[current]) {
       p_regions++;
     } else {
       n_regions++;
     }
+
     for (int neighbor : region_adjacency[current]) {
-      if (visited.find(neighbor) == visited.end()) {
+      if (!visited[neighbor]) {
+        visited[neighbor] = true;
         region_sign[neighbor] = !region_sign[current];
-        edges.insert({current, neighbor});
-        stack.insert(neighbor);
+        queue.push_back(neighbor);
       }
     }
   }
 
 }
 
-std::string Graph::viro_notation(bool unicode) {
+string Graph::viro_notation(bool unicode) {
   if (region_adjacency.empty()) {
     isotopy_type();
   }
 
   //Im odd delta fall sollte bei der fake region angefangen werden
-  if (delta % 2 == 1) {
-    std::string notation = Isotopy::viro_notation(region[root], region_adjacency, unicode);
-    const std::string open_delim = unicode ? "\u27E8" : "<";
-    const std::string close_delim = unicode ? "\u27E9" : ">";
+  if (!delta_even) {
+    string notation = Isotopy::viro_notation(region[root], region_adjacency, unicode);
+    const string open_delim = unicode ? "\u27E8" : "<";
+    const string close_delim = unicode ? "\u27E9" : ">";
     const bool has_additional_components = notation.size() > open_delim.size() + close_delim.size();
-    const std::string insert_fragment = has_additional_components ? (unicode ? "J\u2294" : "Jv") : "J";
+    const string insert_fragment = has_additional_components ? (unicode ? "J\u2294" : "Jv") : "J";
     notation.insert(open_delim.size(), insert_fragment);
     return notation;
   }
   return Isotopy::viro_notation(region[root], region_adjacency, unicode);
 }
 
-std::string viro_notation(int root_region, const std::vector<std::set<int>>& region_adjacency, bool unicode) {
-  const std::string open_delim = unicode ? "\u27E8" : "<";
-  const std::string close_delim = unicode ? "\u27E9" : ">";
-  const std::string sep = unicode ? "\u2294" : "v";
+string viro_notation(int root_region, const Adjacency& region_adjacency, bool unicode) {
+  const string open_delim = unicode ? "\u27E8" : "<";
+  const string close_delim = unicode ? "\u27E9" : ">";
+  const string sep = unicode ? "\u2294" : "v";
 
-  std::function<std::string(int, std::set<int>&)> dfs =
-    [&](int curr_region, std::set<int>& visited) -> std::string {
-      visited.insert(curr_region);
+  vector<bool> visited(region_adjacency.size(), false);
+
+  function<string(int)> dfs =
+    [&](int curr_region) -> string {
+      visited[curr_region] = true;
       int leaf_count = 0;
-      std::vector<int> non_leaf_children;
+      vector<int> non_leaf_children;
       for (const auto& neighbor : region_adjacency[curr_region]) {
-        if (!visited.count(neighbor)) {
+        if (!visited[neighbor]) {
           bool is_leaf = true;
           for (const auto& nn : region_adjacency[neighbor]) {
-            if (!visited.count(nn) && nn != curr_region) {
+            if (!visited[nn] && nn != curr_region) {
               is_leaf = false;
               break;
             }
           }
           if (is_leaf) {
             leaf_count++;
-            visited.insert(neighbor);
+            visited[neighbor] = true;
           } else {
             non_leaf_children.push_back(neighbor);
           }
@@ -330,191 +449,295 @@ std::string viro_notation(int root_region, const std::vector<std::set<int>>& reg
         if (leaf_count == 0) {
           return open_delim  + close_delim;
         }
-        return open_delim + std::to_string(leaf_count) + close_delim;
+        return open_delim + to_string(leaf_count) + close_delim;
       } else if (leaf_count == 0 && non_leaf_children.size() == 1) {
-        return open_delim + "1" + dfs(non_leaf_children[0], visited) + close_delim;
+        return open_delim + "1" + dfs(non_leaf_children[0]) + close_delim;
       } else {
-        std::vector<std::string> child_types;
-        std::map<std::string, int> type_counts;
+        vector<string> child_types;
+        map<string, int> type_counts;
         for (const auto& child : non_leaf_children) {
-          child_types.push_back(dfs(child, visited));
+          child_types.push_back(dfs(child));
           type_counts[child_types.back()]++;
         }
-        std::vector<std::pair<int,std::string>> grouped_types;
+        vector<pair<int,string>> grouped_types;
         for (const auto& pair : type_counts) {
-          grouped_types.push_back(std::make_pair(pair.second, pair.first));
+          grouped_types.push_back(make_pair(pair.second, pair.first));
         }
-        std::sort(grouped_types.begin(), grouped_types.end(), [](const std::pair<int, std::string>& a, const std::pair<int, std::string>& b) {
+        sort(grouped_types.begin(), grouped_types.end(), [](const pair<int, string>& a, const pair<int, string>& b) {
             if (a.second.length() != b.second.length()) {
             return a.second.length() < b.second.length();
             }
             return a.second < b.second;
             });
 
-        std::string result = open_delim;
+        string result = open_delim;
         if (leaf_count > 0) {
-          result += std::to_string(leaf_count) + sep;
+          result += to_string(leaf_count) + sep;
         }
         //Loop of count_type_pairs to ensure order
         for (auto it = grouped_types.begin(); it != grouped_types.end(); ++it) {
           if (it != grouped_types.begin()) { result += sep; }
-          result += std::to_string(it->first) + it->second;
+          result += to_string(it->first) + it->second;
         }
         result += close_delim;
         return result;
       }
     };
 
-  std::set<int> visited;
-  return dfs(root_region, visited);
+  return dfs(root_region);
 }
 
 int num_vertices(int delta) {
   return (delta + 1) * (delta + 2) / 2;
 }
 
+int num_total_vertices(int delta) {
+  return 2 * delta * delta + 2 * delta + 1;
+}
+
 int num_edges(int delta) {
   return 3 * delta + (3 * (delta * delta - delta)) / 2;
 }
 
-std::vector<std::pair<int, int>> triangles_to_edges(int delta, const std::set<std::set<int>>& triangles) {
-  size_t nverts = num_vertices(delta);
-  size_t nedges = num_edges(delta);
+int num_triangles(int delta) {
+  return delta * delta;
+}
 
-  size_t upper_size = nverts * (nverts - 1) / 2;
-  std::vector<bool> adjacency(upper_size, false);
-
-  auto idx = [nverts](size_t i, size_t j) {
-    if (i > j) std::swap(i, j);
-    return i * nverts - (i * (i + 1)) / 2 + (j - i - 1);
-  };
-
-  for (const auto& triangle : triangles) {
-    if (triangle.size() != 3) {
-      throw std::invalid_argument("Each triangle must have exactly 3 vertices.");
-    }
-    auto it1 = triangle.begin();
-    for (size_t a = 0; a < 2; ++a, ++it1) {
-      auto it2 = std::next(it1);
-      for (size_t b = a + 1; b < 3; ++b, ++it2) {
-        adjacency[idx(*it1, *it2)] = true;
-      }
-    }
+vector<Edge> triangles_to_edges(const vector<Triangle>& triangles) {
+  vector<Edge> edges;
+  edges.reserve(triangles.size() * 3);
+  for (const auto& tri : triangles) {
+    const int v0 = tri[0];
+    const int v1 = tri[1];
+    const int v2 = tri[2];
+    auto push_edge = [&](int a, int b) {
+      if (a > b) swap(a, b);
+      edges.emplace_back(a, b);
+    };
+    push_edge(v0, v1);
+    push_edge(v0, v2);
+    push_edge(v1, v2);
   }
-
-  std::vector<std::pair<int, int>> edges;
-  edges.reserve(nedges);
-  for (size_t i = 0; i < nverts; ++i) {
-    for (size_t j = i + 1; j < nverts; ++j) {
-      if (adjacency[idx(i, j)]) {
-        edges.push_back({static_cast<int>(i), static_cast<int>(j)});
-      }
-    }
-  }
-
+  sort(edges.begin(), edges.end());
+  edges.erase(unique(edges.begin(), edges.end()), edges.end());
   return edges;
 }
 
+vector<Edge> triangles_to_edges(const std::set<std::set<int>>& triangles) {
+  vector<Triangle> tri_vec;
+  tri_vec.reserve(triangles.size());
+  for (const auto& tri_set : triangles) {
+    vector<int> sorted_tri(tri_set.begin(), tri_set.end());
+    if (sorted_tri.size() != 3) {
+      throw std::invalid_argument("Each triangle must have exactly 3 vertices.");
+    }
+    tri_vec.push_back({sorted_tri[0], sorted_tri[1], sorted_tri[2]});
+  }
+  return triangles_to_edges(tri_vec);
 }
+
+// Helper to build coordinate mapping for a given delta (cached)
+// This duplicates the quadrant indexing logic from Graph::initialize
+// but provides a standalone version for point_to_idx/idx_to_point functions
+static const vector<pair<int,int>>& get_coord_table(int delta) {
+  static map<int, vector<pair<int,int>>> cache;
+
+  auto it = cache.find(delta);
+  if (it != cache.end()) {
+    return it->second;
+  }
+
+  int nverts = num_vertices(delta);
+  int ntotal = num_total_vertices(delta);
+  int q2_offset = nverts;
+  int q3_offset = q2_offset + nverts - delta - 1;
+  int q4_offset = q3_offset + nverts - delta - 1;
+
+  vector<pair<int,int>> coords(ntotal);
+
+  int idx = 0;
+  for (int limit = delta; limit >= 0; --limit) {
+    int x = delta - limit;
+    for (int y = 0; y <= limit; ++y) {
+      coords[idx] = {x, y};
+
+      if (x == 0 && y == 0) {
+        // Origin: all quadrants map to same point
+      } else if (x == 0) {
+        // Y-axis: Q1/Q2 same, Q3/Q4 same
+        int q3_idx = q3_offset + idx - x - 1;
+        coords[q3_idx] = {-x, -y};
+      } else if (y == 0) {
+        // X-axis: Q1/Q4 same, Q2/Q3 same
+        int q2_idx = q2_offset + idx - delta - 1;
+        coords[q2_idx] = {-x, y};
+      } else {
+        // General case: all four quadrants distinct
+        int q2_idx = q2_offset + idx - delta - 1;
+        int q3_idx = q3_offset + idx - x - 1;
+        int q4_idx = q4_offset + idx - delta - 1 - x;
+        coords[q2_idx] = {-x, y};
+        coords[q3_idx] = {-x, -y};
+        coords[q4_idx] = {x, -y};
+      }
+      ++idx;
+    }
+  }
+
+  cache[delta] = std::move(coords);
+  return cache[delta];
+}
+
+int point_to_idx(int delta, int x, int y) {
+  // Build reverse lookup cache: (x,y) -> idx
+  static map<int, map<pair<int,int>, int>> reverse_cache;
+
+  auto delta_it = reverse_cache.find(delta);
+  if (delta_it == reverse_cache.end()) {
+    // Build reverse mapping from coord table
+    const auto& coords = get_coord_table(delta);
+    auto& reverse_map = reverse_cache[delta];
+    for (size_t i = 0; i < coords.size(); ++i) {
+      reverse_map[coords[i]] = i;
+    }
+    delta_it = reverse_cache.find(delta);
+  }
+
+  auto it = delta_it->second.find({x, y});
+  return (it != delta_it->second.end()) ? it->second : -1;
+}
+
+pair<int,int> idx_to_point(int delta, int idx) {
+  int ntotal = num_total_vertices(delta);
+  if (idx < 0 || idx >= ntotal) {
+    throw out_of_range("idx_to_point: index out of range");
+  }
+  const auto& coords = get_coord_table(delta);
+  return coords[idx];
+}
+
+}  // namespace Isotopy
 
 namespace Utils {
 
-std::map<std::pair<int,int>, int> get_pt2int(int delta) {
-  std::map<std::pair<int,int>, int> pt2int;
-  int index = 0;
-  int nverts = Isotopy::num_vertices(delta);
-  for (int orthant = 0; orthant < 4; ++orthant) {
-    for (int limit = delta; limit >= 0; --limit) {
-      for (int y = 0; y <= limit; ++y) {
-        int x = delta - limit;
-        int adjusted_y = (orthant == 1 || orthant == 2) ? -y : y;
-        int adjusted_x = (orthant == 2 || orthant == 3) ? -x : x;
-        pt2int[{adjusted_x, adjusted_y}] = index + orthant * nverts;
-        ++index;
-      }
-    }
-    index = 0; // Reset index for the next orthant
+// map<pair<int,int>, int> get_pt2int(int delta) {
+//   map<pair<int,int>, int> pt2int;
+//   int index = 0;
+//   size_t nverts = Isotopy::num_vertices(delta);
+//   for (int orthant = 0; orthant < 4; ++orthant) {
+//     for (int limit = delta; limit >= 0; --limit) {
+//       for (int y = 0; y <= limit; ++y) {
+//         int x = delta - limit;
+//         int adjusted_y = (orthant == 1 || orthant == 2) ? -y : y;
+//         int adjusted_x = (orthant == 2 || orthant == 3) ? -x : x;
+//         pt2int[{adjusted_x, adjusted_y}] = index + orthant * nverts;
+//         ++index;
+//       }
+//     }
+//     index = 0; // Reset index for the next orthant
+//   }
+
+//   return pt2int;
+// }
+
+pair<vector<bool>, vector<Isotopy::Triangle>> pcom_to_signs_and_triangles_vec(const string& pcom_string_input) {
+  vector<bool> sign_vector;
+  vector<Isotopy::Triangle> triangles;
+
+  string pcom_string = pcom_string_input;
+  const string cols_token = ",{\"cols\":";
+  size_t cols_pos = 0;
+  while ((cols_pos = pcom_string.find(cols_token, cols_pos)) != string::npos) {
+    size_t end = pcom_string.find('}', cols_pos);
+    if (end == string::npos) break;
+    pcom_string.erase(cols_pos, end - cols_pos + 1);
   }
 
-  return pt2int;
+  auto bracket_range = [&](const string& key) -> pair<size_t, size_t> {
+    size_t start = pcom_string.find(key);
+    if (start == string::npos) throw std::runtime_error("Missing key in pcom string: " + key);
+    size_t open = pcom_string.find('[', start);
+    if (open == string::npos) throw std::runtime_error("Malformed pcom: '[' not found for " + key);
+    int depth = 0;
+    size_t pos = open;
+    for (; pos < pcom_string.size(); ++pos) {
+      if (pcom_string[pos] == '[') ++depth;
+      else if (pcom_string[pos] == ']') --depth;
+      if (depth == 0) break;
+    }
+    if (depth != 0) throw std::runtime_error("Malformed pcom: unmatched brackets for " + key);
+    return {open, pos};
+  };
+
+  auto [sign_open, sign_close] = bracket_range("\"SIGNS\"");
+  for (size_t i = sign_open + 1; i < sign_close; ) {
+    char c = pcom_string[i];
+    if (c == 't') {
+      sign_vector.push_back(true);
+      i += 4;
+    } else if (c == 'f') {
+      sign_vector.push_back(false);
+      i += 5;
+    } else {
+      ++i;
+    }
+  }
+
+  auto [cells_open, cells_close] = bracket_range("\"MAXIMAL_CELLS\"");
+  size_t cursor = cells_open + 1;
+  while (true) {
+    cursor = pcom_string.find('[', cursor);
+    if (cursor == string::npos || cursor >= cells_close) break;
+    ++cursor;
+
+    Isotopy::Triangle tri{};
+    for (int idx = 0; idx < 3; ++idx) {
+      while (cursor < cells_close &&
+             !(pcom_string[cursor] == '-' || isdigit(static_cast<unsigned char>(pcom_string[cursor]))))
+        ++cursor;
+      size_t end = cursor;
+      while (end < cells_close &&
+             (pcom_string[end] == '-' || isdigit(static_cast<unsigned char>(pcom_string[end]))))
+        ++end;
+      if (cursor == end) throw std::runtime_error("Malformed triangle data in pcom");
+      tri[idx] = stoi(pcom_string.substr(cursor, end - cursor));
+      cursor = pcom_string.find_first_of(",]", end);
+      if (cursor == string::npos || cursor > cells_close)
+        throw std::runtime_error("Malformed triangle entry in pcom");
+      if (pcom_string[cursor] == ',') ++cursor;
+    }
+    triangles.push_back(tri);
+    cursor = pcom_string.find(']', cursor);
+    if (cursor == string::npos || cursor > cells_close)
+      throw std::runtime_error("Malformed triangle closing bracket in pcom");
+    ++cursor;
+  }
+
+  return make_pair(sign_vector, triangles);
 }
 
-
-std::pair<std::vector<bool>, std::set<std::set<int>>> pcom_to_signs_and_triangles(const std::string& pcom_string_input) {
-    std::vector<bool> sign_vector;
-    std::set<std::set<int>> triangles;
-
-    //bring files in common format
-    std::regex cols_regex(",\\{\"cols\":[0-9]+\\}");
-    std::string cols_deleted = std::regex_replace(pcom_string_input, cols_regex, "");
-    std::regex whitespaces_regex("\\s");
-    std::string pcom_string = std::regex_replace(cols_deleted, whitespaces_regex, "");
-    //std::cout << pcom_string << std::endl; 
-
-    //extract sign vector
-    std::regex signs_regex("\"SIGNS\":\\[([^ \\]]*)\\]");
-    std::smatch base_match; 
-    std::regex_search(pcom_string, base_match, signs_regex);
-    std::stringstream base_match_stream(base_match[1]);
-    std::string temp_sign;  
-    char del = ','; 
-    while (getline(base_match_stream, temp_sign, del)){
-            if (temp_sign == "true"){
-                sign_vector.push_back(1);
-            } else {
-                    sign_vector.push_back(0);
-            }
-    }
-    /*for (auto i : sign_vector){
-        std::cout << i;
-    }
-    std::cout << std::endl; */
-        
-
-    //extract triangles
-    std::regex triangle_regex("\\[([0-9]+,[0-9]+,[0-9]+)\\]");
-    std::smatch triangle_match;
-    std::regex_search(pcom_string, triangle_match, triangle_regex);
-    auto triangles_begin = std::sregex_iterator(pcom_string.begin(), pcom_string.end(), triangle_regex);
-    auto triangles_end = std::sregex_iterator();
-    for(std::sregex_iterator i = triangles_begin; i!=triangles_end; ++i){
-        std::smatch match = *i;
-        std::string temp_tri = match[1].str(); 
-        std::stringstream temp_tri_stream(temp_tri); 
-        std::string temp_number; 
-        char del = ','; 
-        std::set<int> triangle; 
-        while (getline(temp_tri_stream, temp_number, del)){
-                triangle.insert(std::stoi(temp_number));
-        }
-        //std::cerr << match.str() << std::endl;
-        triangles.insert(triangle);
-    }
-/*
-    for (auto i : triangles){
-        for (auto x:i){
-            std::cout << x << ",";
-        }
-        std::cout << std::endl;
-    }
-    std::cout << std::endl; */
-    
-
-    return std::make_pair(sign_vector, triangles);
+std::pair<vector<bool>, std::set<std::set<int>>> pcom_to_signs_and_triangles(const string& pcom_string) {
+  auto [signs, triangles_vec] = pcom_to_signs_and_triangles_vec(pcom_string);
+  std::set<std::set<int>> triangles_set;
+  for (const auto& tri : triangles_vec) {
+    triangles_set.insert({tri[0], tri[1], tri[2]});
+  }
+  return {signs, triangles_set};
 }
 
-std::string signs_and_triangles_to_pcom(const std::vector<bool>& sign_vector, const std::set<std::set<int>>& triangles) {
+string signs_and_triangles_to_pcom(const vector<bool>& sign_vector, const vector<Isotopy::Triangle>& triangles) {
     return signs_and_triangles_to_pcom(sign_vector, triangles, "<unknown>");
 }
-std::string signs_and_triangles_to_pcom(const std::vector<bool>& sign_vector, const std::set<std::set<int>>& triangles, std::string origin_tag) {
+string signs_and_triangles_to_pcom(const vector<bool>& sign_vector, const vector<Isotopy::Triangle>& triangles, string origin_tag) {
   const int lib_vers = 2; 
-  std::string faces_str = "\"MAXIMAL_CELLS\": ";
+  string faces_str = "\"MAXIMAL_CELLS\": ";
   faces_str += "[\n";
   for (const auto& triangle : triangles) {
     //faces_str += triangulation.dcel.to_string(face) + ",\n";
     faces_str += "[";
     for (auto point : triangle) {
-        faces_str += std::to_string(point) += ","; 
+        faces_str += to_string(point);
+        faces_str += ","; 
     }
     faces_str.pop_back();
     faces_str += "],\n";
@@ -522,18 +745,18 @@ std::string signs_and_triangles_to_pcom(const std::vector<bool>& sign_vector, co
   faces_str.pop_back();
   faces_str.pop_back();
   faces_str += "]\n";
-  std::string sign_str = "\"SIGNS\": [\n";
+  string sign_str = "\"SIGNS\": [\n";
   for (size_t i = 0; i < sign_vector.size(); ++i) {
-    std::string sign = sign_vector[i] ? "true" : "false";
+    string sign = sign_vector[i] ? "true" : "false";
     sign_str += sign + ",\n";
   }
   sign_str.pop_back();
   sign_str.pop_back();
   sign_str += "]\n";
-  std::string filet_str = "{ \"_ns\": { \"polymake\": [ \"https://polymake.org\", \"4.13\" ] },\n";
+  string filet_str = "{ \"_ns\": { \"polymake\": [ \"https://polymake.org\", \"4.13\" ] },\n";
   filet_str += "  \"_type\": \"tropical::Hypersurface<Min>\",\n";
   filet_str += "  \"_id\": \"filet\",\n";
-  filet_str += "  \"_libisotopy_version\": \""+ std::to_string(lib_vers) +"\",\n"; 
+  filet_str += "  \"_libisotopy_version\": \""+ to_string(lib_vers) +"\",\n"; 
   filet_str += "  \"_attrs\": { \"ORIGIN\": { \"attachment\": true } },\n";
   filet_str += "  \"ORIGIN\": \"" + origin_tag + "\",\n";
   filet_str += "  \"DUAL_SUBDIVISION\": {\n";
@@ -546,4 +769,35 @@ std::string signs_and_triangles_to_pcom(const std::vector<bool>& sign_vector, co
   return filet_str;
 }
 
+// Backwards-compatible overloads for set<set<int>>
+std::pair<vector<bool>, std::set<std::set<int>>> pcom_to_signs_and_triangles_set(const string& pcom_string) {
+  return pcom_to_signs_and_triangles(pcom_string);
 }
+
+string signs_and_triangles_to_pcom(const vector<bool>& sign_vector, const std::set<std::set<int>>& triangles) {
+  return signs_and_triangles_to_pcom(sign_vector, triangles, "<unknown>");
+}
+
+string signs_and_triangles_to_pcom(const vector<bool>& sign_vector, const std::set<std::set<int>>& triangles, string origin_tag) {
+  // Convert set<set<int>> to vector<Triangle>
+  vector<Isotopy::Triangle> triangles_vec;
+  triangles_vec.reserve(triangles.size());
+  for (const auto& tri_set : triangles) {
+    vector<int> tri_tmp(tri_set.begin(), tri_set.end());
+    triangles_vec.push_back({tri_tmp[0], tri_tmp[1], tri_tmp[2]});
+  }
+  return signs_and_triangles_to_pcom(sign_vector, triangles_vec, origin_tag);
+}
+
+// Backwards-compatible helper
+std::map<std::pair<int,int>, int> get_pt2int(int delta) {
+  std::map<std::pair<int,int>, int> pt2int;
+  int nverts = Isotopy::num_vertices(delta);
+  for (int idx = 0; idx < nverts; ++idx) {
+    auto [x, y] = Isotopy::idx_to_point(delta, idx);
+    pt2int[{x, y}] = idx;
+  }
+  return pt2int;
+}
+
+}  // namespace Utils

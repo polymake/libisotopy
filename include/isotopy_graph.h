@@ -1,11 +1,24 @@
 #pragma once
 
-#include <vector>
-#include <set>
+#include <array>
 #include <map>
+#include <set>
 #include <string>
+#include <vector>
 
 namespace Isotopy {
+
+// Bring common std types into Isotopy namespace for cleaner declarations
+using std::vector;
+using std::string;
+using std::pair;
+using std::array;
+
+// Domain-specific type aliases for clarity
+using Triangle = array<int, 3>;
+using Edge = pair<int, int>;
+using Adjacency = vector<vector<int>>;
+using QuadrantIndices = array<int, 4>;
 
 /**
  * @brief Represents an isotopy type as a graph and provides methods for isotopy type computation.
@@ -14,33 +27,41 @@ namespace Isotopy {
  * side points and edges or triangles, compute isotopy invariants, and generate Viro notation.
  */
 struct Graph {
-  int delta; ///< The degree of the patchwork.
-  std::vector<bool> sign; ///< Sign vector with a boolean value for each vertex.
-  std::vector<std::set<int>> adjacency; ///< Adjacency list for the graph.
+  int delta = 0;        ///< The degree of the patchwork.
+  bool delta_even;      ///< True if delta is even, false if odd.
+  int nverts = 0;       ///< Number of vertices in the first quadrant.
+  int ntotalverts = 0;  ///< Total number of compressed vertices across quadrants.
+  int ntriangles = 0;   ///< Number of triangles in the input triangulation.
+  int ncomponents = 0;  ///< Number of connected components (after connected_components()).
 
-  std::vector<int> side_points; ///< Maps side point index to vertex index.
-  std::vector<std::pair<int,int>> int2pt; ///< Maps vertex index to (x,y) coordinates in the triangle.
+  // Quadrant-based representation
+  vector<bool> polarisation; ///< polarisation[vertex_idx] gives the sign of vertex vertex_idx
+  vector<QuadrantIndices> quad_idxs; ///< quad_idxs[i][q] gives the global index of vertex i reflected to quadrant q
 
-  // Information about connected components
+  // Edge lists for component analysis
+  vector<Edge> component_edges; ///< Edges for connected component analysis (same-sign edges)
+  vector<Edge> adjacency_edges; ///< Edges for component adjacency (different-sign edges)
+
+  // Connected component information
+  vector<int> parent; ///< Union-find parent array for component construction
+  vector<int> rank;   ///< Union-find rank array for union-by-rank optimization
   int root = -1; ///< Root component index.
-  std::vector<int> component; ///< component[i] gives the component index of vertex i.
-  std::vector<std::set<int>> component_adjacency; ///< component_adjacency[c] gives the set of components adjacent to component c.
+  vector<int> component; ///< component[i] gives the component index of vertex i.
+  Adjacency component_adjacency; ///< component_adjacency[c] gives the set of components adjacent to component c.
 
+  // Region information
   int root_region = -1; ///< Region index of the root component.
   int region_count = 0; ///< Total number of regions.
-  std::vector<int> region; ///< region[c] gives the region index of component c.
-  std::vector<std::set<int>> region_adjacency; ///< region_adjacency[r] gives the set of regions adjacent to region r.
-  std::vector<bool> region_sign; ///< region_sign[r] gives the sign of region r (true for positive, false for negative).
-  
+  vector<int> region; ///< region[c] gives the region index of component c.
+  Adjacency region_adjacency; ///< region_adjacency[r] gives the set of regions adjacent to region r.
+  vector<bool> region_sign; ///< region_sign[r] gives the sign of region r (true for positive, false for negative).
 
-  std::set<std::pair<int, int>> edges = std::set<std::pair<int, int>>(); ///< Edges of the tree representing the isotopy graph.
+  int p_regions = 0; ///< Number of positive regions.
+  int n_regions = -1; ///< Number of negative regions.
 
-  std::vector<int> side_points_complete;
-  std::vector<std::pair<int,int>> edges_complete;
-  std::vector<bool> sign_complete;
-
-  int p_regions = 0; ///< Number of even regions.
-  int n_regions = -1; ///< Number of odd regions.
+  // Legacy members (may be deprecated)
+  vector<Edge> antipodal_partner;
+  vector<Edge> edges_complete;
 
 
   /**
@@ -51,34 +72,40 @@ struct Graph {
   Graph() = default;
 
   /**
-   * @brief Constructs a graph from a sign vector and a set of edges.
-   *
-   * @param delta The degree of the patchwork.
-   * @param sign_vector The sign vector with a boolean value for each vertex.
-   * @param edges The set of edges, each represented as a pair of vertex indices.
-   */
-  Graph(int delta, const std::vector<bool>& sign_vector, const std::set<std::pair<int, int>>& edges);
-
-
-  /**
    * @brief Constructs a graph from a sign vector and a list of edges.
    *
    * @param delta The degree of the patchwork.
    * @param sign_vector The sign vector with a boolean value for each vertex.
    * @param edges The list of edges, each represented as a pair of vertex indices.
    */
-  Graph(int delta, const std::vector<bool>& sign_vector, const std::vector<std::pair<int, int>>& edges);
-
-
+  Graph(int delta, const vector<bool>& sign_vector, const vector<Edge>& edges);
 
   /**
-   * @brief Constructs a graph from a sign vector and a set of triangles.
+   * @brief Constructs a graph from a sign vector and a set of edges (backwards compatibility).
+   *
+   * @param delta The degree of the patchwork.
+   * @param sign_vector The sign vector with a boolean value for each vertex.
+   * @param edges The set of edges, each represented as a pair of vertex indices.
+   */
+  Graph(int delta, const vector<bool>& sign_vector, const std::set<std::pair<int, int>>& edges);
+
+  /**
+   * @brief Constructs a graph from a sign vector and a list of triangles.
+   *
+   * @param delta defines the degree of the patchwork
+   * @param sign_vector The sign vector with a boolean value for each vertex.
+   * @param triangles The list of triangles, each represented as three vertex indices.
+   */
+  Graph(int delta, const vector<bool>& sign_vector, const vector<Triangle>& triangles);
+
+  /**
+   * @brief Constructs a graph from a sign vector and a set of triangles (backwards compatibility).
    *
    * @param delta defines the degree of the patchwork
    * @param sign_vector The sign vector with a boolean value for each vertex.
    * @param triangles The set of triangles, each represented as a set of three vertex indices.
    */
-  Graph(int delta, const std::vector<bool>& sign_vector, const std::set<std::set<int>>& triangles);
+  Graph(int delta, const vector<bool>& sign_vector, const std::set<std::set<int>>& triangles);
 
   /**
    * @brief Computes the connected components of the graph.
@@ -87,14 +114,6 @@ struct Graph {
    * Updates the component adjacency information.
    */
   void connected_components();
-
-  /**
-   * @brief Prepares neighbor sets for isotopy root computation.
-   *
-   * For each side point, computes the set of other side points it is connected to via its component.
-   * Populates the `nbs` member with this neighbor information.
-   */
-  void pre_isotopy_root();
 
   /**
    * @brief Computes the isotopy root of the graph.
@@ -142,7 +161,7 @@ struct Graph {
    * @param unicode If true, use Unicode symbols; otherwise, use ASCII.
    * @return The Viro notation string for the isotopy type.
    */
-  std::string viro_notation(bool unicode = false);
+  string viro_notation(bool unicode = false);
 
   /**
    * @brief Returns the number of even regions in the isotopy decomposition.
@@ -172,42 +191,55 @@ struct Graph {
    */
   bool is_mcurve() {
     if (root_region == -1) isotopy_type();
-    int expected_regions = (delta - 1) * (delta - 2) / 2 + 1; 
+    int expected_regions = (delta - 1) * (delta - 2) / 2 + 1;
     return (p_regions + n_regions) == expected_regions;
   };
 
-  void lazy_compute(bool need_components, bool need_root, bool need_regions, bool need_region_counts);
+private:
+  void initialize(const vector<bool>& sign_vector);
 
-  std::vector<int> parent;
-
-  int find(int x) {
-    while (parent[x] != x) {
-      parent[x] = parent[parent[x]];
-      x = parent[x];
+  // Union-find helpers for arbitrary parent arrays
+  int find(vector<int>& parent_array, int x) {
+    while (parent_array[x] != x) {
+      parent_array[x] = parent_array[parent_array[x]];
+      x = parent_array[x];
     }
     return x;
   }
 
-  void unite(int x, int y) {
-    int px = find(x), py = find(y);
-    if (px != py) {
-      parent[py] = px;
-    }
+  void unite(vector<int>& parent_array, int x, int y) {
+    int px = find(parent_array, x);
+    int py = find(parent_array, y);
+    if (px != py) parent_array[py] = px;
   }
 
+  void unite(vector<int>& parent_array, vector<int>& rank_array, int x, int y) {
+    int px = find(parent_array, x);
+    int py = find(parent_array, y);
+    if (px != py) {
+      if (rank_array[px] < rank_array[py]) {
+        parent_array[px] = py;
+      } else if (rank_array[px] > rank_array[py]) {
+        parent_array[py] = px;
+      } else {
+        parent_array[py] = px;
+        rank_array[px]++;
+      }
+    }
+  }
 };
 
 /**
  * @brief Generates the Viro notation string for a given root region and region adjacency structure.
- *
- * This function can be used independently to produce Viro notation from explicit region and adjacency data.
- *
- * @param root_region The index of the root region.
- * @param region_adjacency The adjacency list of regions.
- * @param unicode If true, use Unicode symbols; otherwise, use ASCII.
- * @return The Viro notation string.
- */
-std::string viro_notation(int root_region, const std::vector<std::set<int>>& region_adjacency, bool unicode = false);
+   *
+   * This function can be used independently to produce Viro notation from explicit region and adjacency data.
+   *
+   * @param root_region The index of the root region.
+   * @param region_adjacency The adjacency list of regions.
+   * @param unicode If true, use Unicode symbols; otherwise, use ASCII.
+   * @return The Viro notation string.
+   */
+string viro_notation(int root_region, const Adjacency& region_adjacency, bool unicode = false);
 
 /**
  * @brief Computes the number of vertices in a triangular grid of degree delta.
@@ -221,6 +253,41 @@ std::string viro_notation(int root_region, const std::vector<std::set<int>>& reg
 int num_vertices(int delta);
 
 /**
+ * @brief Computes the total number of compressed vertices across all quadrants.
+ *
+ * This counts all distinct lattice points obtained by reflecting the triangular grid
+ * of degree delta into the four quadrants and identifying coincident points.
+ *
+ * @param delta The degree of the patchwork.
+ * @return The total number of distinct vertices.
+ */
+int num_total_vertices(int delta);
+
+/**
+ * @brief Returns the compressed vertex index for a given lattice point.
+ *
+ * The index matches the internal indexing used by Graph (via quad_idxs and signs),
+ * obtained by reflecting the degree-delta triangular grid into all four quadrants
+ * and identifying coincident points.
+ *
+ * @param delta The degree of the patchwork.
+ * @param x The x-coordinate of the lattice point.
+ * @param y The y-coordinate of the lattice point.
+ * @return The vertex index, or -1 if the point is not part of the grid.
+ */
+int point_to_idx(int delta, int x, int y);
+
+/**
+ * @brief Returns the lattice point corresponding to a compressed vertex index.
+ *
+ * @param delta The degree of the patchwork.
+ * @param idx The vertex index.
+ * @return The (x,y) coordinates of the lattice point.
+ * @throws std::out_of_range if idx is outside the valid range.
+ */
+pair<int,int> idx_to_point(int delta, int idx);
+
+/**
  * @brief Computes the number of edges in a triangular grid of degree delta.
  *
  * The total edges equal the boundary edges (3*delta) plus the interior edges
@@ -232,27 +299,66 @@ int num_vertices(int delta);
 int num_edges(int delta);
 
 /**
- * @brief Converts a set of triangles to a vector of edges.
+ * @brief Computes the number of triangles in a triangulation of degree delta.
  *
- * Each triangle is represented as a set of three vertex indices. This function extracts all edges
- * from the triangles, ensuring consistent ordering (smaller index first) and removing duplicates.
- * Uses an efficient adjacency matrix approach for optimal performance.
+ * For a complete triangulation of a triangular grid with degree delta, there are delta^2 triangles.
  *
- * @param delta The degree of the patchwork (determines number of vertices).
- * @param triangles A set of triangles, where each triangle is a set of three vertex indices.
- * @return A vector of edges, where each edge is a pair of vertex indices with the smaller index first.
+ * @param delta The degree of the patchwork.
+ * @return The number of triangles in the triangulation.
  */
-std::vector<std::pair<int, int>> triangles_to_edges(int delta, const std::set<std::set<int>>& triangles);
+int num_triangles(int delta);
+
+/**
+ * @brief Converts triangles to a unique edge list.
+ *
+ * @param triangles Triangles represented as Isotopy::Triangle entries.
+ * @return A deduplicated vector of edges.
+ */
+vector<Edge> triangles_to_edges(const vector<Triangle>& triangles);
+
+/**
+ * @brief Converts set-based triangles to a unique edge list.
+ *
+ * @param triangles Triangles represented as sets of vertex indices.
+ * @return A deduplicated vector of edges.
+ */
+vector<Edge> triangles_to_edges(const std::set<std::set<int>>& triangles);
+
+inline vector<Edge> triangles_to_edges(int /*delta*/, const vector<Triangle>& triangles) {
+  return triangles_to_edges(triangles);
+}
+
+inline vector<Edge> triangles_to_edges(int /*delta*/, const std::set<std::set<int>>& triangles) {
+  return triangles_to_edges(triangles);
+}
 
 }
 
 namespace Utils {
 
+// Bring Isotopy types into Utils for convenience
+using Isotopy::vector;
+using Isotopy::string;
+using Isotopy::pair;
+
+// Backwards-compatible helper (master API)
 std::map<std::pair<int,int>, int> get_pt2int(int delta);
 
-std::pair<std::vector<bool>, std::set<std::set<int>>> pcom_to_signs_and_triangles(const std::string& pcom_string);
+// Legacy API: returns set<set<int>>
+std::pair<vector<bool>, std::set<std::set<int>>> pcom_to_signs_and_triangles(const string& pcom_string);
 
-std::string signs_and_triangles_to_pcom(const std::vector<bool>& sign_vector, const std::set<std::set<int>>& triangles);
-std::string signs_and_triangles_to_pcom(const std::vector<bool>& sign_vector, const std::set<std::set<int>>& triangles, std::string origin_tag);
+// New API: returns vector<Triangle>
+pair<vector<bool>, vector<Isotopy::Triangle>> pcom_to_signs_and_triangles_vec(const string& pcom_string);
+
+// Backwards-compatible overload: returns set<set<int>>
+std::pair<vector<bool>, std::set<std::set<int>>> pcom_to_signs_and_triangles_set(const string& pcom_string);
+
+// New API: takes vector<Triangle>
+string signs_and_triangles_to_pcom(const vector<bool>& sign_vector, const vector<Isotopy::Triangle>& triangles);
+string signs_and_triangles_to_pcom(const vector<bool>& sign_vector, const vector<Isotopy::Triangle>& triangles, string origin_tag);
+
+// Backwards-compatible overloads: take set<set<int>>
+string signs_and_triangles_to_pcom(const vector<bool>& sign_vector, const std::set<std::set<int>>& triangles);
+string signs_and_triangles_to_pcom(const vector<bool>& sign_vector, const std::set<std::set<int>>& triangles, string origin_tag);
 
 }
