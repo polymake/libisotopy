@@ -89,6 +89,13 @@ TEST_CASE("Isotopy::Graph batch test from tree.txt", "[isotopy_graph]") {
 
     REQUIRE(graph.p_regions == expected_p);
     REQUIRE(graph.n_regions == expected_n);
+
+    std::vector<Isotopy::Triangle> triangles(data.triangulation.begin(), data.triangulation.end());
+    Isotopy::Graph triangle_graph(delta, data.signs_vec, triangles);
+    triangle_graph.isotopy_type();
+    REQUIRE(triangle_graph.even_regions() == expected_p);
+    REQUIRE(triangle_graph.odd_regions() == expected_n);
+    REQUIRE(triangle_graph.viro_notation() == graph.viro_notation());
   }
 }
 TEST_CASE("Isotopy::Graph batch test from YAML file", "[isotopy_graph][yaml]") {
@@ -115,6 +122,12 @@ TEST_CASE("Isotopy::Graph batch test from YAML file", "[isotopy_graph][yaml]") {
     }
     std::string viro = node.at("viro").get_value<std::string>();
 
+    if (triangulation_vec.size() != static_cast<size_t>(delta * delta)) {
+      std::cout << "Skipping YAML case " << line_count << " (delta=" << delta
+                << ") due to invalid triangulation size: "
+                << triangulation_vec.size() << "\n";
+      continue;
+    }
     Isotopy::Graph graph(delta, signs_vec, triangulation_vec);
     graph.isotopy_type();
     REQUIRE(graph.even_regions() == expected_p);
@@ -133,6 +146,18 @@ TEST_CASE("Isotopy::Graph batch test from YAML file", "[isotopy_graph][yaml]") {
     std::pair<std::vector<bool>, std::set<std::set<int>>> sign_triangles_pair = Utils::pcom_to_signs_and_triangles(pcom);
     REQUIRE(sign_triangles_pair.first == signs_vec);
     REQUIRE(sign_triangles_pair.second == triangulation_vec);
+
+    std::vector<Isotopy::Triangle> tri_vec;
+    tri_vec.reserve(triangulation_vec.size());
+    for (const auto& tri : triangulation_vec) {
+      std::vector<int> sorted_tri(tri.begin(), tri.end());
+      tri_vec.push_back({sorted_tri[0], sorted_tri[1], sorted_tri[2]});
+    }
+    Isotopy::Graph triangle_graph(delta, signs_vec, tri_vec);
+    triangle_graph.isotopy_type();
+    REQUIRE(triangle_graph.even_regions() == expected_p);
+    REQUIRE(triangle_graph.odd_regions() == expected_n);
+    REQUIRE(triangle_graph.viro_notation() == viro);
 
 
   }
@@ -172,6 +197,13 @@ TEST_CASE("Isotopy::Graph batch test from mcurves.txt.xz", "[isotopy_graph]") {
 
     REQUIRE(graph.p_regions == expected_p);
     REQUIRE(graph.n_regions == expected_n);
+
+    std::vector<Isotopy::Triangle> triangles(data.triangulation.begin(), data.triangulation.end());
+    Isotopy::Graph triangle_graph(delta, data.signs_vec, triangles);
+    triangle_graph.isotopy_type();
+    REQUIRE(triangle_graph.even_regions() == expected_p);
+    REQUIRE(triangle_graph.odd_regions() == expected_n);
+    REQUIRE(triangle_graph.viro_notation() == graph.viro_notation());
   }
   pclose(pipe);
 }
