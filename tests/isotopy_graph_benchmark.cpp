@@ -7,7 +7,6 @@
 #include <fstream>
 #include <string>
 #include <vector>
-#include <set>
 #include <array>
 #include <algorithm>
 #include <chrono>
@@ -39,44 +38,27 @@ double throughput_benchmark(const std::string& label, Fn&& fn, int seconds = 10,
   return per_second;
 }
 
-std::vector<Isotopy::Triangle> to_triangle_vec(const std::set<std::set<int>>& src) {
-  std::vector<Isotopy::Triangle> out;
-  out.reserve(src.size());
-  for (const auto& tri : src) {
-    std::vector<int> sorted_tri(tri.begin(), tri.end());
-    out.push_back({sorted_tri[0], sorted_tri[1], sorted_tri[2]});
-  }
-  return out;
-}
-
 }  // namespace
 
 TEST_CASE("Benchmark Sebastian's example", "[isotopy_graph]") {
   int delta = 6;
   std::vector<bool> sign {0,0,1,0,1,0,1,0,0,1,1,1,1,1,1,0,0,1,0,1,0,1,1,1,1,0,1,1};
-  std::set<std::set<int>> triangles {{5,6,12},{5,11,12},{4,5,11},{11,12,17},{4,10,11},{11,16,17},{3,4,10},{10,11,16},{16,17,21},{2,3,10},{2,9,10},{9,10,16},{1,2,9},{9,16,21},{1,9,21},{1,15,21},{1,8,15},{1,7,8},{7,8,15},{0,1,7},{7,15,21},{7,14,21},{14,20,21},{14,19,20},{7,13,14},{13,14,19},{20,21,24},{20,23,24},{19,20,23},{23,24,26},{13,18,19},{19,22,23},{18,19,22},{23,25,26},{22,23,25},{25,26,27}};
-  auto triangles_vec = to_triangle_vec(triangles);
+  std::vector<Isotopy::Triangle> triangles = {
+    {5,6,12},{5,11,12},{4,5,11},{11,12,17},{4,10,11},{11,16,17},{3,4,10},{10,11,16},
+    {16,17,21},{2,3,10},{2,9,10},{9,10,16},{1,2,9},{9,16,21},{1,9,21},{1,15,21},
+    {1,8,15},{1,7,8},{7,8,15},{0,1,7},{7,15,21},{7,14,21},{14,20,21},{14,19,20},
+    {7,13,14},{13,14,19},{20,21,24},{20,23,24},{19,20,23},{23,24,26},{13,18,19},
+    {19,22,23},{18,19,22},{23,25,26},{22,23,25},{25,26,27}
+  };
   BENCHMARK_ADVANCED("constructor")(Catch::Benchmark::Chronometer meter) {
     meter.measure([&] { return Isotopy::Graph(delta, sign, triangles); });
-  };
-  BENCHMARK_ADVANCED("constructor (triangles_vec)")(Catch::Benchmark::Chronometer meter) {
-    meter.measure([&] { return Isotopy::Graph(delta, sign, triangles_vec); });
   };
   BENCHMARK_ADVANCED("isotopy_type")(Catch::Benchmark::Chronometer meter) {
     Isotopy::Graph graph(delta, sign, triangles);
     meter.measure([&] { return graph.isotopy_type(); });
   };
-  BENCHMARK_ADVANCED("isotopy_type (triangles_vec)")(Catch::Benchmark::Chronometer meter) {
-    Isotopy::Graph graph(delta, sign, triangles_vec);
-    meter.measure([&] { return graph.isotopy_type(); });
-  };
   BENCHMARK_ADVANCED("viro_notation")(Catch::Benchmark::Chronometer meter) {
     Isotopy::Graph graph(delta, sign, triangles);
-    graph.isotopy_type();
-    meter.measure([&] { return graph.viro_notation(); });
-  };
-  BENCHMARK_ADVANCED("viro_notation (triangles_vec)")(Catch::Benchmark::Chronometer meter) {
-    Isotopy::Graph graph(delta, sign, triangles_vec);
     graph.isotopy_type();
     meter.measure([&] { return graph.viro_notation(); });
   };
@@ -93,45 +75,27 @@ TEST_CASE("Benchmark specific cases from YAML (triangles)", "[isotopy_graph][yam
     auto& node = doc[case_num - 1];
     int delta = node.at("degree").get_value<int>();
     std::vector<bool> signs_vec = node.at("polarisation").get_value<std::vector<bool>>();
-    std::set<std::set<int>> triangulation_vec = node.at("triangulation").get_value<std::set<std::set<int>>>();
-    auto triangulation_vecv = to_triangle_vec(triangulation_vec);
+    std::vector<Isotopy::Triangle> triangulation =
+      node.at("triangulation").get_value<std::vector<Isotopy::Triangle>>();
 
     BENCHMARK_ADVANCED("triangles: constructor " + std::to_string(case_num))(Catch::Benchmark::Chronometer meter) {
-      meter.measure([&] { return Isotopy::Graph(delta, signs_vec, triangulation_vec); });
-    };
-    BENCHMARK_ADVANCED("triangles_vec: constructor " + std::to_string(case_num))(Catch::Benchmark::Chronometer meter) {
-      meter.measure([&] { return Isotopy::Graph(delta, signs_vec, triangulation_vecv); });
+      meter.measure([&] { return Isotopy::Graph(delta, signs_vec, triangulation); });
     };
 
 
     BENCHMARK_ADVANCED("triangles: isotopy_type " + std::to_string(case_num))(Catch::Benchmark::Chronometer meter) {
-      Isotopy::Graph graph(delta, signs_vec, triangulation_vec);
-      meter.measure([&] { return graph.isotopy_type(); });
-    };
-    BENCHMARK_ADVANCED("triangles_vec: isotopy_type " + std::to_string(case_num))(Catch::Benchmark::Chronometer meter) {
-      Isotopy::Graph graph(delta, signs_vec, triangulation_vecv);
+      Isotopy::Graph graph(delta, signs_vec, triangulation);
       meter.measure([&] { return graph.isotopy_type(); });
     };
 
     BENCHMARK_ADVANCED("triangles: viro_notation " + std::to_string(case_num))(Catch::Benchmark::Chronometer meter) {
-      Isotopy::Graph graph(delta, signs_vec, triangulation_vec);
-      graph.isotopy_type();
-      meter.measure([&] { return graph.viro_notation(); });
-    };
-    BENCHMARK_ADVANCED("triangles_vec: viro_notation " + std::to_string(case_num))(Catch::Benchmark::Chronometer meter) {
-      Isotopy::Graph graph(delta, signs_vec, triangulation_vecv);
+      Isotopy::Graph graph(delta, signs_vec, triangulation);
       graph.isotopy_type();
       meter.measure([&] { return graph.viro_notation(); });
     };
     BENCHMARK_ADVANCED("triangles: all three " + std::to_string(case_num))(Catch::Benchmark::Chronometer meter) {
       meter.measure([&] {
-        Isotopy::Graph graph(delta, signs_vec, triangulation_vec);
-        return graph.viro_notation();
-      });
-    };
-    BENCHMARK_ADVANCED("triangles_vec: all three " + std::to_string(case_num))(Catch::Benchmark::Chronometer meter) {
-      meter.measure([&] {
-        Isotopy::Graph graph(delta, signs_vec, triangulation_vecv);
+        Isotopy::Graph graph(delta, signs_vec, triangulation);
         return graph.viro_notation();
       });
     };
@@ -184,16 +148,11 @@ TEST_CASE("Benchmark single case from YAML for 10 seconds (triangles, averaged o
   auto& node = doc[case_num - 1];
   int delta = node.at("degree").get_value<int>();
   std::vector<bool> signs_vec = node.at("polarisation").get_value<std::vector<bool>>();
-  std::set<std::set<int>> triangulation_vec = node.at("triangulation").get_value<std::set<std::set<int>>>();
-  auto triangulation_vecv = to_triangle_vec(triangulation_vec);
+  std::vector<Isotopy::Triangle> triangulation =
+    node.at("triangulation").get_value<std::vector<Isotopy::Triangle>>();
 
   throughput_benchmark("triangles_dense", [&]() {
-    Isotopy::Graph graph(delta, signs_vec, triangulation_vec);
-    volatile std::string viro = graph.viro_notation();
-    (void)viro;
-  });
-  throughput_benchmark("triangles_vec_dense", [&]() {
-    Isotopy::Graph graph(delta, signs_vec, triangulation_vecv);
+    Isotopy::Graph graph(delta, signs_vec, triangulation);
     volatile std::string viro = graph.viro_notation();
     (void)viro;
   });
@@ -229,16 +188,11 @@ TEST_CASE("Benchmark sparse case from YAML for 10 seconds (triangles, averaged o
   auto& node = doc[case_num - 1];
   int delta = node.at("degree").get_value<int>();
   std::vector<bool> signs_vec = node.at("polarisation").get_value<std::vector<bool>>();
-  std::set<std::set<int>> triangulation_vec = node.at("triangulation").get_value<std::set<std::set<int>>>();
-  auto triangulation_vecv = to_triangle_vec(triangulation_vec);
+  std::vector<Isotopy::Triangle> triangulation =
+    node.at("triangulation").get_value<std::vector<Isotopy::Triangle>>();
 
   throughput_benchmark("triangles_sparse", [&]() {
-    Isotopy::Graph graph(delta, signs_vec, triangulation_vec);
-    volatile std::string viro = graph.viro_notation();
-    (void)viro;
-  });
-  throughput_benchmark("triangles_vec_sparse", [&]() {
-    Isotopy::Graph graph(delta, signs_vec, triangulation_vecv);
+    Isotopy::Graph graph(delta, signs_vec, triangulation);
     volatile std::string viro = graph.viro_notation();
     (void)viro;
   });
@@ -340,14 +294,15 @@ TEST_CASE("Isotopy::Graph batch timing analysis from YAML file", "[isotopy_graph
 
       int delta = node.at("degree").get_value<int>();
       std::vector<bool> signs_vec = node.at("polarisation").get_value<std::vector<bool>>();
-      std::set<std::set<int>> triangulation_vec = node.at("triangulation").get_value<std::set<std::set<int>>>();
+      std::vector<Isotopy::Triangle> triangulation =
+        node.at("triangulation").get_value<std::vector<Isotopy::Triangle>>();
       size_t nverts = Isotopy::num_vertices(delta);
       if (signs_vec.size() != nverts) {
         continue; // Skip invalid test case
       }
 
       auto start = std::chrono::high_resolution_clock::now();
-      Isotopy::Graph graph(delta, signs_vec, triangulation_vec);
+      Isotopy::Graph graph(delta, signs_vec, triangulation);
       graph.isotopy_type();
       graph.viro_notation();
       auto end = std::chrono::high_resolution_clock::now();
