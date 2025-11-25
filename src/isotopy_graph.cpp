@@ -7,6 +7,7 @@
 #include <stdexcept>
 #include <string>
 #include <cctype>
+#include <mutex>
 
 //For the Utils
 #include <cstdint>
@@ -24,6 +25,8 @@ using std::unique;
 using std::swap;
 using std::make_pair;
 using std::to_string;
+using std::mutex;
+using std::lock_guard;
 
 // Regex types
 using std::stringstream;
@@ -541,6 +544,8 @@ vector<Edge> triangles_to_edges(const std::set<std::set<int>>& triangles) {
 // but provides a standalone version for point_to_idx/idx_to_point functions
 static const vector<pair<int,int>>& get_coord_table(int delta) {
   static map<int, vector<pair<int,int>>> cache;
+  static mutex cache_mutex;
+  lock_guard<mutex> lock(cache_mutex);
 
   auto it = cache.find(delta);
   if (it != cache.end()) {
@@ -591,6 +596,8 @@ static const vector<pair<int,int>>& get_coord_table(int delta) {
 int point_to_idx(int delta, int x, int y) {
   // Build reverse lookup cache: (x,y) -> idx
   static map<int, map<pair<int,int>, int>> reverse_cache;
+  static mutex cache_mutex;
+  lock_guard<mutex> lock(cache_mutex);
 
   auto delta_it = reverse_cache.find(delta);
   if (delta_it == reverse_cache.end()) {
