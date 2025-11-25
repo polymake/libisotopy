@@ -309,6 +309,20 @@ int num_edges(int delta);
 int num_triangles(int delta);
 
 /**
+ * @brief Calculates the arithmetic genus of a non-singular algebraic curve of degree delta.
+ * Formula: (delta - 1) * (delta - 2) / 2
+ */
+int genus(int delta);
+
+/**
+ * @brief Calculates the maximum number of regions in the real projective plane complement
+ *        for an M-curve of degree delta (Harnack's bound + parity correction).
+ * Formula: genus(delta) + 1 + (1 if delta is even)
+ */
+int max_regions(int delta);
+
+
+/**
  * @brief Converts triangles to a unique edge list.
  *
  * @param triangles Triangles represented as Isotopy::Triangle entries.
