@@ -1,5 +1,4 @@
 #include "isotopy_graph.h"
-#include "viro_format.h"
 #include <algorithm>
 #include <cassert>
 #include <functional>
@@ -32,28 +31,7 @@ using std::getline;
 using std::stoi;
 
 // Exceptions
-namespace {
 using std::out_of_range;
-
-// Using declarations for common std types to reduce verbosity
-using std::vector;
-using std::string;
-using std::pair;
-using std::array;
-using std::map;
-using std::set;
-using std::function;
-using std::sort;
-using std::unique;
-using std::swap;
-using std::make_pair;
-using std::to_string;
-
-// Regex types
-using std::stringstream;
-using std::getline;
-using std::stoi;
-}
 
 namespace Isotopy {
 
@@ -439,13 +417,17 @@ string Graph::viro_notation(bool unicode) {
 }
 
 string viro_notation(int root_region, const Adjacency& region_adjacency, bool unicode) {
-  std::vector<bool> visited(region_adjacency.size(), false);
+  const string open_delim = unicode ? "\u27E8" : "<";
+  const string close_delim = unicode ? "\u27E9" : ">";
+  const string sep = unicode ? "\u2294" : "v";
 
-  std::function<std::string(int)> dfs =
-    [&](int curr_region) -> std::string {
+  vector<bool> visited(region_adjacency.size(), false);
+
+  function<string(int)> dfs =
+    [&](int curr_region) -> string {
       visited[curr_region] = true;
       int leaf_count = 0;
-      std::vector<std::string> child_strings;
+      vector<int> non_leaf_children;
       for (const auto& neighbor : region_adjacency[curr_region]) {
         if (!visited[neighbor]) {
           bool is_leaf = true;
@@ -459,18 +441,47 @@ string viro_notation(int root_region, const Adjacency& region_adjacency, bool un
             leaf_count++;
             visited[neighbor] = true;
           } else {
-            child_strings.push_back(dfs(neighbor));
+            non_leaf_children.push_back(neighbor);
           }
         }
       }
+      if (non_leaf_children.empty()) {
+        if (leaf_count == 0) {
+          return open_delim  + close_delim;
+        }
+        return open_delim + to_string(leaf_count) + close_delim;
+      } else if (leaf_count == 0 && non_leaf_children.size() == 1) {
+        return open_delim + "1" + dfs(non_leaf_children[0]) + close_delim;
+      } else {
+        vector<string> child_types;
+        map<string, int> type_counts;
+        for (const auto& child : non_leaf_children) {
+          child_types.push_back(dfs(child));
+          type_counts[child_types.back()]++;
+        }
+        vector<pair<int,string>> grouped_types;
+        for (const auto& pair : type_counts) {
+          grouped_types.push_back(make_pair(pair.second, pair.first));
+        }
+        sort(grouped_types.begin(), grouped_types.end(), [](const pair<int, string>& a, const pair<int, string>& b) {
+            if (a.second.length() != b.second.length()) {
+            return a.second.length() < b.second.length();
+            }
+            return a.second < b.second;
+            });
 
-      ViroFormat::NodeSummary summary;
-      summary.leaf_count = leaf_count;
-      summary.children.reserve(child_strings.size());
-      for (const auto& child : child_strings) {
-        summary.children.push_back(&child);
+        string result = open_delim;
+        if (leaf_count > 0) {
+          result += to_string(leaf_count) + sep;
+        }
+        //Loop of count_type_pairs to ensure order
+        for (auto it = grouped_types.begin(); it != grouped_types.end(); ++it) {
+          if (it != grouped_types.begin()) { result += sep; }
+          result += to_string(it->first) + it->second;
+        }
+        result += close_delim;
+        return result;
       }
-      return ViroFormat::format(summary, unicode);
     };
 
   return dfs(root_region);
@@ -490,16 +501,6 @@ int num_edges(int delta) {
 
 int num_triangles(int delta) {
   return delta * delta;
-}
-
-int genus(int delta) {
-  if (delta < 1) return 0;
-  return (delta - 1) * (delta - 2) / 2;
-}
-
-int max_regions(int delta) {
-  int g = genus(delta);
-  return g + 1 + (delta % 2 == 0 ? 1 : 0);
 }
 
 vector<Edge> triangles_to_edges(const vector<Triangle>& triangles) {

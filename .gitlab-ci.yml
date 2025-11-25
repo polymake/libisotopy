@@ -2,7 +2,7 @@ stages:
   - test
   - benchmark
 
-test_full:
+test_isotopy_graph:
   stage: test
   image: gcc:latest
   before_script:
@@ -12,11 +12,11 @@ test_full:
     - make
     - make test_full
 
-speedtest:
+benchmark_isotopy_graph:
   stage: benchmark
   image: gcc:latest
   needs:
-    - job: test_full
+    - job: test_isotopy_graph
       artifacts: false
   before_script:
     - apt-get update && apt-get install -y make g++ wget git
