@@ -776,7 +776,6 @@ string signs_and_triangles_to_pcom(const vector<bool>& sign_vector, const vector
   return filet_str;
 }
 
-// Backwards-compatible overloads for set<set<int>>
 std::pair<vector<bool>, std::set<std::set<int>>> pcom_to_signs_and_triangles_set(const string& pcom_string) {
   return pcom_to_signs_and_triangles(pcom_string);
 }
@@ -796,10 +795,9 @@ string signs_and_triangles_to_pcom(const vector<bool>& sign_vector, const std::s
   return signs_and_triangles_to_pcom(sign_vector, triangles_vec, origin_tag);
 }
 
-// Backwards-compatible helper
 std::map<std::pair<int,int>, int> get_pt2int(int delta) {
   std::map<std::pair<int,int>, int> pt2int;
-  int nverts = Isotopy::num_vertices(delta);
+  int nverts = Isotopy::num_total_vertices(delta);
   for (int idx = 0; idx < nverts; ++idx) {
     auto [x, y] = Isotopy::idx_to_point(delta, idx);
     pt2int[{x, y}] = idx;
