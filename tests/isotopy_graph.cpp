@@ -23,6 +23,7 @@ TEST_CASE("Isotopy::Graph from triangulation  (Harnack 8)", "[isotopy_graph]") {
   std::map<std::pair<int,int>, int> pt_map = Utils::get_pt2int(delta);
   REQUIRE(graph.component[pt_map.at(std::make_pair(0,0))] == graph.component[pt_map.at(std::make_pair(0,1))]);
   REQUIRE(graph.component[pt_map.at(std::make_pair(0,0))] == graph.component[pt_map.at(std::make_pair(1,0))]);
+  REQUIRE(graph.component[pt_map.at(std::make_pair(0,-1))] == graph.component[pt_map.at(std::make_pair(1,-1))]);
   //std::string pcom = Utils::signs_and_triangles_to_pcom(sign,triangles);
   //REQUIRE(Utils::pcom_to_signs_and_triangles(pcom) == std::make_pair(sign,triangles)); //Maybe sort triangles
 
