@@ -36,8 +36,13 @@ $(TEST_BIN): $(TARGET) $(TEST_OBJ) | $(TEST_DIR)
 TEST_BATCH_SRC = tests/isotopy_graph_batch.cpp
 TEST_BATCH_OBJ = obj/isotopy_graph_batch.o
 TEST_FULL_BIN = $(BIN_DIR)/isotopy_graph_full
+TEST_YAML = tests/isotopy_tests.yaml
+TEST_YAML_XZ = tests/isotopy_tests.yaml.xz
 
-test_full: $(TEST_FULL_BIN)
+$(TEST_YAML): $(TEST_YAML_XZ)
+	xz -dc $< > $@
+
+test_full: $(TEST_FULL_BIN) $(TEST_YAML)
 	./$(TEST_FULL_BIN)
 
 $(TEST_FULL_BIN): $(TARGET) $(TEST_OBJ) $(TEST_BATCH_OBJ) | $(BIN_DIR)
@@ -47,7 +52,7 @@ BENCHMARK_SRC = tests/isotopy_graph_benchmark.cpp
 BENCHMARK_OBJ = $(BENCHMARK_SRC:.cpp=.o)
 BENCHMARK_BIN = $(BENCHMARK_DIR)/isotopy_graph_benchmark
 
-benchmark: $(BENCHMARK_BIN)
+benchmark: $(BENCHMARK_BIN) $(TEST_YAML)
 	./$(BENCHMARK_BIN)
 
 $(BENCHMARK_BIN): $(TARGET) $(BENCHMARK_OBJ) | $(BENCHMARK_DIR)
@@ -57,7 +62,7 @@ PROFILING_SRC = tests/isotopy_graph_profiling.cpp
 PROFILING_OBJ = $(PROFILING_SRC:.cpp=.o)
 PROFILING_BIN = $(BIN_DIR)/isotopy_graph_profiling
 
-profiling: $(PROFILING_BIN)
+profiling: $(PROFILING_BIN) $(TEST_YAML)
 	./$(PROFILING_BIN)
 
 $(PROFILING_BIN): $(TARGET) $(PROFILING_OBJ) | $(BIN_DIR)
@@ -66,7 +71,7 @@ $(PROFILING_BIN): $(TARGET) $(PROFILING_OBJ) | $(BIN_DIR)
 clean:
 	rm -f $(OBJ) $(TARGET) $(TEST_OBJ) $(TEST_BIN) $(TEST_BATCH_OBJ) \
 	$(TEST_FULL_BIN) $(BENCHMARK_OBJ) $(BENCHMARK_BIN) $(PROFILING_OBJ) \
-	$(PROFILING_BIN) obj/*.o wasm_obj/*.o libisotopy_wasm.a
+	$(PROFILING_BIN) obj/*.o wasm_obj/*.o libisotopy_wasm.a $(TEST_YAML)
 	rm -rf $(BIN_DIR)
 
  
