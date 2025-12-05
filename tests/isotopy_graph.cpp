@@ -11,7 +11,7 @@
 #include <regex>
 
 
-TEST_CASE("Isotopy::Graph from triangulation  (Harnack 8)", "[isotopy_graph]") {
+TEST_CASE("Constructor: Graph from set<set<int>> (triangulation)", "[isotopy_graph][constructor]") {
   int delta = 8;
   std::vector<bool> sign {1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1};
   std::set<std::set<int>> triangles = {{1,0,9},{1,9,10},{2,1,10},{2,10,11},{3,2,11},{3,11,12},{4,3,12},{4,12,13},{5,4,13},{5,13,14},{6,5,14},{6,14,15},{7,6,15},{7,15,16},{8,7,16},{10,9,17},{10,17,18},{11,10,18},{11,18,19},{12,11,19},{12,19,20},{13,12,20},{13,20,21},{14,13,21},{14,21,22},{15,14,22},{15,22,23},{16,15,23},{18,17,24},{18,24,25},{19,18,25},{19,25,26},{20,19,26},{20,26,27},{21,20,27},{21,27,28},{22,21,28},{22,28,29},{23,22,29},{25,24,30},{25,30,31},{26,25,31},{26,31,32},{27,26,32},{27,32,33},{28,27,33},{28,33,34},{29,28,34},{31,30,35},{31,35,36},{32,31,36},{32,36,37},{33,32,37},{33,37,38},{34,33,38},{36,35,39},{36,39,40},{37,36,40},{37,40,41},{38,37,41},{40,39,42},{40,42,43},{41,40,43},{43,42,44}};
@@ -178,7 +178,7 @@ TEST_CASE("Isotopy::Graph 75", "[isotopy_graph]") {
     //std::cout << "Shorthand: " << Utils::web_shorthand(delta, sign, triangles) << std::endl;
 }
 
-TEST_CASE("Graph constructor from edges (vector)", "[isotopy_graph]") {
+TEST_CASE("Constructor: Graph from vec<Isotopy::Edge>", "[isotopy_graph][constructor]") {
   int delta = 2;
   std::vector<bool> sign = {true, true, false, false, false, true};
   std::vector<std::pair<int,int>> edges = {
@@ -191,7 +191,7 @@ TEST_CASE("Graph constructor from edges (vector)", "[isotopy_graph]") {
   REQUIRE(graph.odd_regions() == 0);
 }
 
-TEST_CASE("Graph constructor from edges (set)", "[isotopy_graph]") {
+TEST_CASE("Constructor: Graph from set<Isotopy::Edge>", "[isotopy_graph][constructor]") {
   int delta = 2;
   std::vector<bool> sign = {true, true, false, false, false, true};
   std::set<std::pair<int,int>> edges = {
@@ -204,7 +204,7 @@ TEST_CASE("Graph constructor from edges (set)", "[isotopy_graph]") {
   REQUIRE(graph.odd_regions() == 0);
 }
 
-TEST_CASE("Component vs adjacency classification for delta=1", "[isotopy_graph]") {
+TEST_CASE("Constructor: Graph from vec<Isotopy::Triangle>", "[isotopy_graph][constructor]") {
   int delta = 1;
   std::vector<bool> sign {true, false, false};
   std::vector<Isotopy::Triangle> triangles = {{0,1,2}};

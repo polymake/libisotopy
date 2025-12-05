@@ -6,7 +6,9 @@ test_isotopy_graph:
   stage: test
   image: gcc:latest
   before_script:
-    - apt-get update && apt-get install -y make g++ wget
+    - apt-get update && apt-get install -y make g++ wget xz-utils git-lfs
+    - git lfs install
+    - git lfs pull
   script:
     - make clean
     - make
@@ -19,7 +21,8 @@ benchmark_isotopy_graph:
     - job: test_isotopy_graph
       artifacts: false
   before_script:
-    - apt-get update && apt-get install -y make g++ wget git
+    - apt-get update && apt-get install -y make g++ wget git xz-utils git-lfs
+    - git lfs install
   allow_failure: true
   script:
     - |

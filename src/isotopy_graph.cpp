@@ -123,6 +123,10 @@ Graph::Graph(int delta, const vector<bool>& sign_vector, const vector<Triangle>&
 
   assert(triangles.size() == static_cast<size_t>(ntriangles) && "Triangulation must have delta^2 triangles");
 
+ for (int i = 0; i < ntotalverts; ++i) {
+    parent[i] = i;
+  }
+
   for (const auto& [v0, v1, v2] : triangles) {
     for (int q = 0; q < 4; ++q) {
       int qv0 = quad_idxs[v0][q];
@@ -137,27 +141,26 @@ Graph::Graph(int delta, const vector<bool>& sign_vector, const vector<Triangle>&
       bool v0_eq_v2 = (s0 == s2);
       bool v1_eq_v2 = (s1 == s2);
 
-      // Check if triangle has mixed signs
-      bool has_mixed_signs = !v0_eq_v1 || !v0_eq_v2 || !v1_eq_v2;
+      if (v0_eq_v1 && v0_eq_v2 && v1_eq_v2) {
+        component_edges.push_back({qv0, qv1});
+        component_edges.push_back({qv0, qv2});
+        // component_edges.push_back({qv1, qv2});
 
-      if (has_mixed_signs) {
-        // Initialize parent for all involved vertices
-        if (parent[qv0] == -1) parent[qv0] = qv0;
-        if (parent[qv1] == -1) parent[qv1] = qv1;
-        if (parent[qv2] == -1) parent[qv2] = qv2;
-
-        if (v1_eq_v2) {
-          component_edges.push_back({qv1, qv2});
-          adjacency_edges.push_back({qv0, qv1});
+      } else {
+        if (v0_eq_v1) {
+          component_edges.push_back({qv0, qv1});
+          adjacency_edges.push_back({qv0, qv2});
+          // adjacency_edges.push_back({qv1, qv2});
 
         } else if (v0_eq_v2) {
           component_edges.push_back({qv0, qv2});
           adjacency_edges.push_back({qv0, qv1});
+          // adjacency_edges.push_back({qv1, qv2});
 
-        } else if (v0_eq_v1) {
-          component_edges.push_back({qv0, qv1});
+        } else if (v1_eq_v2) {
+          component_edges.push_back({qv1, qv2});
           adjacency_edges.push_back({qv0, qv2});
-
+          // adjacency_edges.push_back({qv0, qv1});
         } 
       }
     }

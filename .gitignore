@@ -11,3 +11,6 @@ debug
 *.swp
 *~
 .DS_Store
+
+# Test data (decompressed from .xz)
+tests/isotopy_tests.yaml
