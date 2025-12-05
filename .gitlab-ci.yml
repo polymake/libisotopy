@@ -109,6 +109,8 @@ benchmark_isotopy_graph:
         make clean && make && make benchmark | tee curr.txt
         read_metrics CURR curr.txt
         git fetch origin "$CI_MERGE_REQUEST_TARGET_BRANCH_NAME"
+        git reset --hard HEAD
+        git clean -fd
         git checkout "origin/$CI_MERGE_REQUEST_TARGET_BRANCH_NAME"
         make clean && make && make benchmark | tee base.txt
         read_metrics BASE base.txt
@@ -132,12 +134,17 @@ benchmark_isotopy_graph:
         declare -A CURR PREV MASTER
         make clean && make && make benchmark | tee curr.txt
         read_metrics CURR curr.txt
-        git fetch origin && git checkout HEAD^
+        git fetch origin
+        git reset --hard HEAD
+        git clean -fd
+        git checkout HEAD^
         make clean && make && make benchmark | tee prev.txt
         read_metrics PREV prev.txt
         print_table "Current vs previous commit" CURR PREV "Previous"
 
         if [ "$BRANCH" != "master" ]; then
+          git reset --hard HEAD
+          git clean -fd
           git checkout origin/master
           make clean && make && make benchmark | tee master.txt
           read_metrics MASTER master.txt
