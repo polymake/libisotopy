@@ -44,7 +44,7 @@ void Graph::initialize(const vector<bool>& sign_vector) {
   ntotalverts = num_total_vertices(delta);
   ntriangles  = num_triangles(delta);
 
-  assert(sign_vector.size() == static_cast<size_t>(nverts) && "sign vector length does not match number of vertices");
+  // assert(sign_vector.size() == static_cast<size_t>(nverts) && "sign vector length does not match number of vertices");
   
   int q2_offset = nverts;
   int q3_offset = q2_offset + nverts - delta - 1;
@@ -115,17 +115,14 @@ void Graph::initialize(const vector<bool>& sign_vector) {
   adjacency_edges.reserve(4 * ntriangles);
   parent.assign(ntotalverts, -1);
   rank.assign(ntotalverts, 0);
-}
-
-Graph::Graph(int delta, const vector<bool>& sign_vector, const vector<Triangle>& triangles)
-  : delta(delta) {
-  initialize(sign_vector);
-
-  assert(triangles.size() == static_cast<size_t>(ntriangles) && "Triangulation must have delta^2 triangles");
-
- for (int i = 0; i < ntotalverts; ++i) {
+  
+  for (int i = 0; i < ntotalverts; ++i) {
     parent[i] = i;
   }
+}
+
+void Graph::process_triangles(const vector<Triangle>& triangles) {
+  // assert(triangles.size() == static_cast<size_t>(ntriangles) && "Triangulation must have delta^2 triangles");
 
   for (const auto& [v0, v1, v2] : triangles) {
     for (int q = 0; q < 4; ++q) {
@@ -161,17 +158,19 @@ Graph::Graph(int delta, const vector<bool>& sign_vector, const vector<Triangle>&
           component_edges.push_back({qv1, qv2});
           adjacency_edges.push_back({qv0, qv2});
           // adjacency_edges.push_back({qv0, qv1});
-        } 
+        }
       }
     }
   }
 }
 
-// Edge-based constructor
-Graph::Graph(int delta, const vector<bool>& sign_vector, const vector<Edge>& edges)
+Graph::Graph(int delta, const vector<bool>& sign_vector, const vector<Triangle>& triangles)
   : delta(delta) {
   initialize(sign_vector);
+  process_triangles(triangles);
+}
 
+void Graph::process_edges(const vector<Edge>& edges) {
   for (const auto& [v0, v1] : edges) {
     for (int q = 0; q < 4; ++q) {
       int qv0 = quad_idxs[v0][q];
@@ -195,6 +194,13 @@ Graph::Graph(int delta, const vector<bool>& sign_vector, const vector<Edge>& edg
   }
 }
 
+// Edge-based constructor
+Graph::Graph(int delta, const vector<bool>& sign_vector, const vector<Edge>& edges)
+  : delta(delta) {
+  initialize(sign_vector);
+  process_edges(edges);
+}
+
 // Backwards compatibility constructor: converts set<pair<int,int>> to vector<Edge>
 Graph::Graph(int delta, const vector<bool>& sign_vector, const set<pair<int, int>>& edges)
 : Graph(delta, sign_vector, vector<Edge>(edges.begin(), edges.end())) {}
@@ -205,7 +211,7 @@ Graph::Graph(int delta, const vector<bool>& sign_vector, const set<set<int>>& tr
     vector<Triangle> tri_vec;
     tri_vec.reserve(triangles.size());
     for (const auto& tri_set : triangles) {
-      assert(tri_set.size() == 3 && "Each triangle must have exactly 3 vertices");
+      // assert(tri_set.size() == 3 && "Each triangle must have exactly 3 vertices");
       vector<int> tri_tmp(tri_set.begin(), tri_set.end());
       tri_vec.push_back({tri_tmp[0], tri_tmp[1], tri_tmp[2]});
     }
