@@ -50,9 +50,40 @@ TEST_CASE("Benchmark Sebastian's example", "[isotopy_graph]") {
     {7,13,14},{13,14,19},{20,21,24},{20,23,24},{19,20,23},{23,24,26},{13,18,19},
     {19,22,23},{18,19,22},{23,25,26},{22,23,25},{25,26,27}
   };
-  BENCHMARK_ADVANCED("constructor")(Catch::Benchmark::Chronometer meter) {
+  std::vector<Isotopy::Edge> edges = Isotopy::triangles_to_edges(triangles);
+
+  // Shared: initialize phase
+  BENCHMARK_ADVANCED("initialize")(Catch::Benchmark::Chronometer meter) {
+    meter.measure([&] {
+      Isotopy::Graph graph(delta);
+      return graph.initialize(sign);
+    });
+  };
+  // Triangle processing phase
+  BENCHMARK_ADVANCED("process_triangles")(Catch::Benchmark::Chronometer meter) {
+    Isotopy::Graph graph(delta);
+    graph.initialize(sign);
+    meter.measure([&] {
+      return graph.process_triangles(triangles);
+    });
+  };
+  // Edge processing phase
+  BENCHMARK_ADVANCED("process_edges")(Catch::Benchmark::Chronometer meter) {
+    Isotopy::Graph graph(delta);
+    graph.initialize(sign);
+    meter.measure([&] {
+      return graph.process_edges(edges);
+    });
+  };
+  // Triangle-based constructor
+  BENCHMARK_ADVANCED("constructor (triangles)")(Catch::Benchmark::Chronometer meter) {
     meter.measure([&] { return Isotopy::Graph(delta, sign, triangles); });
   };
+  // Edge-based constructor
+  BENCHMARK_ADVANCED("constructor (edges)")(Catch::Benchmark::Chronometer meter) {
+    meter.measure([&] { return Isotopy::Graph(delta, sign, edges); });
+  };
+  // Remaining phases (using triangle constructor as baseline)
   BENCHMARK_ADVANCED("isotopy_type")(Catch::Benchmark::Chronometer meter) {
     Isotopy::Graph graph(delta, sign, triangles);
     meter.measure([&] { return graph.isotopy_type(); });
@@ -82,6 +113,22 @@ TEST_CASE("Benchmark specific cases from YAML (triangles)", "[isotopy_graph][yam
       meter.measure([&] { return Isotopy::Graph(delta, signs_vec, triangulation); });
     };
 
+    BENCHMARK_ADVANCED("triangles: initialize " + std::to_string(case_num))(Catch::Benchmark::Chronometer meter) {
+      meter.measure([&] {
+        Isotopy::Graph graph(delta);
+        graph.initialize(signs_vec);
+        return graph.nverts;
+      });
+    };
+
+    BENCHMARK_ADVANCED("triangles: process_triangles " + std::to_string(case_num))(Catch::Benchmark::Chronometer meter) {
+      Isotopy::Graph graph(delta);
+      graph.initialize(signs_vec);
+      meter.measure([&] {
+        graph.process_triangles(triangulation);
+        return graph.component_edges.size();
+      });
+    };
 
     BENCHMARK_ADVANCED("triangles: isotopy_type " + std::to_string(case_num))(Catch::Benchmark::Chronometer meter) {
       Isotopy::Graph graph(delta, signs_vec, triangulation);
@@ -117,6 +164,23 @@ TEST_CASE("Benchmark specific cases from YAML (edges)", "[isotopy_graph][yaml][s
 
     BENCHMARK_ADVANCED("edges: constructor " + std::to_string(case_num))(Catch::Benchmark::Chronometer meter) {
       meter.measure([&] { return Isotopy::Graph(delta, signs_vec, edges_vec); });
+    };
+
+    BENCHMARK_ADVANCED("edges: initialize " + std::to_string(case_num))(Catch::Benchmark::Chronometer meter) {
+      meter.measure([&] {
+        Isotopy::Graph graph(delta);
+        graph.initialize(signs_vec);
+        return graph.nverts;
+      });
+    };
+
+    BENCHMARK_ADVANCED("edges: process_edges " + std::to_string(case_num))(Catch::Benchmark::Chronometer meter) {
+      Isotopy::Graph graph(delta);
+      graph.initialize(signs_vec);
+      meter.measure([&] {
+        graph.process_edges(edges_vec);
+        return graph.component_edges.size();
+      });
     };
 
     BENCHMARK_ADVANCED("edges: isotopy_type " + std::to_string(case_num))(Catch::Benchmark::Chronometer meter) {

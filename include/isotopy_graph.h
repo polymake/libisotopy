@@ -72,6 +72,47 @@ struct Graph {
   Graph() = default;
 
   /**
+   * @brief Constructs a graph with only delta set (for two-phase construction).
+   *
+   * Use this followed by initialize() and process_triangles()/process_edges()
+   * for fine-grained control or benchmarking individual phases.
+   *
+   * @param delta The degree of the patchwork.
+   */
+  explicit Graph(int delta) : delta(delta) {}
+
+  /**
+   * @brief Initializes the graph structure from a sign vector.
+   *
+   * Sets up quadrant indices, polarisation array, antipodal partners, and
+   * reserves space for edge vectors. Must be called before process_triangles()
+   * or process_edges().
+   *
+   * @param sign_vector The sign vector with a boolean value for each vertex.
+   */
+  void initialize(const vector<bool>& sign_vector);
+
+  /**
+   * @brief Processes triangles to populate component and adjacency edges.
+   *
+   * Must be called after initialize(). Classifies triangle edges as same-sign
+   * (component edges) or different-sign (adjacency edges) across all quadrants.
+   *
+   * @param triangles The list of triangles, each represented as three vertex indices.
+   */
+  void process_triangles(const vector<Triangle>& triangles);
+
+  /**
+   * @brief Processes edges to populate component and adjacency edges.
+   *
+   * Must be called after initialize(). Classifies edges as same-sign
+   * (component edges) or different-sign (adjacency edges) across all quadrants.
+   *
+   * @param edges The list of edges, each represented as a pair of vertex indices.
+   */
+  void process_edges(const vector<Edge>& edges);
+
+  /**
    * @brief Constructs a graph from a sign vector and a list of edges.
    *
    * @param delta The degree of the patchwork.
@@ -196,8 +237,6 @@ struct Graph {
   };
 
 private:
-  void initialize(const vector<bool>& sign_vector);
-
   // Union-find helpers for arbitrary parent arrays
   int find(vector<int>& parent_array, int x) {
     while (parent_array[x] != x) {
