@@ -1,6 +1,7 @@
 #pragma once
 
 #include <array>
+#include <cstdint>
 #include <map>
 #include <set>
 #include <string>
@@ -35,7 +36,7 @@ struct Graph {
   int ncomponents = 0;  ///< Number of connected components (after connected_components()).
 
   // Quadrant-based representation
-  vector<bool> polarisation; ///< polarisation[vertex_idx] gives the sign of vertex vertex_idx
+  vector<uint8_t> polarisation; ///< polarisation[vertex_idx] gives the sign of vertex vertex_idx
   vector<QuadrantIndices> quad_idxs; ///< quad_idxs[i][q] gives the global index of vertex i reflected to quadrant q
 
   // Edge lists for component analysis

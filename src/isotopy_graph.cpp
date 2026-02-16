@@ -50,8 +50,8 @@ void Graph::initialize(const vector<bool>& sign_vector) {
   int q3_offset = q2_offset + nverts - delta - 1;
   int q4_offset = q3_offset + nverts - delta - 1;
 
-  polarisation = sign_vector;       // Copy Q1 signs
-  polarisation.resize(ntotalverts); // Extend for Q2-Q4
+  polarisation.assign(sign_vector.begin(), sign_vector.end());
+  polarisation.resize(ntotalverts, 0);
   quad_idxs.resize(nverts);
   antipodal_partner.resize(2 * (delta + 1));
 
@@ -113,12 +113,9 @@ void Graph::initialize(const vector<bool>& sign_vector) {
 
   component_edges.reserve(4 * ntriangles);
   adjacency_edges.reserve(4 * ntriangles);
-  parent.assign(ntotalverts, -1);
+  parent.resize(ntotalverts);
+  for (int i = 0; i < ntotalverts; ++i) parent[i] = i;
   rank.assign(ntotalverts, 0);
-  
-  for (int i = 0; i < ntotalverts; ++i) {
-    parent[i] = i;
-  }
 }
 
 void Graph::process_triangles(const vector<Triangle>& triangles) {
