@@ -454,3 +454,13 @@ TEST_CASE("Isotopy::triangles_to_edges - Invalid triangle", "[isotopy]") {
 
     REQUIRE_THROWS_AS(Isotopy::triangles_to_edges(delta, triangles), std::invalid_argument);
 }
+
+TEST_CASE("Graph constructor - delta exceeds MAX_DELTA", "[isotopy][bounds]") {
+    // Attempting to construct a graph with delta > MAX_DELTA should throw
+    int delta = 13;  // Exceeds MAX_DELTA = 12
+    int nverts = Isotopy::num_vertices(delta);
+    std::vector<bool> signs(nverts, false);
+    std::vector<Isotopy::Triangle> triangles = {{0, 1, 2}};
+
+    REQUIRE_THROWS_AS(Isotopy::Graph(delta, signs, triangles), std::invalid_argument);
+}
