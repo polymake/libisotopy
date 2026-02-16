@@ -54,7 +54,7 @@ void Graph::initialize(const vector<bool>& sign_vector) {
   int q3_offset = q2_offset + nverts - delta - 1;
   int q4_offset = q3_offset + nverts - delta - 1;
 
-  for (int i = 0; i < nverts; ++i) polarisation[i] = sign_vector[i];
+  for (int i = 0; i < nverts; ++i) polarisation[i] = sign_vector[i];  // Copy Q1 signs (rest already zero-initialized)
   antipodal_partner.resize(2 * (delta + 1));
 
   int idx = 0;
@@ -114,7 +114,7 @@ void Graph::initialize(const vector<bool>& sign_vector) {
   }
 
   adjacency_edges.reserve(4 * ntriangles);
-  for (int i = 0; i < ntotalverts; ++i) parent[i] = i;
+  for (int i = 0; i < ntotalverts; ++i) parent[i] = i;  // Initialize union-find: each vertex is its own parent (rank already zero-initialized)
 }
 
 void Graph::process_triangles(const vector<Triangle>& triangles) {
@@ -208,7 +208,7 @@ void Graph::connected_components() {
 
   // Unions already performed during process_triangles/process_edges.
   // Just assign component IDs.
-  std::fill(component.begin(), component.begin() + ntotalverts, -1);
+  std::fill(component.begin(), component.begin() + ntotalverts, -1);  // Fill only used portion of fixed-size array
   ncomponents = 0;
 
   for (int i = 0; i < ntotalverts; ++i) {
@@ -238,13 +238,13 @@ void Graph::isotopy_type() {
   n_regions = delta_even ? -1 : 0;
 
   // Use union-find to merge antipodal components into regions
-  array<int, MAX_TOTAL_VERTS> region_parent;
+  array<int, MAX_TOTAL_VERTS> region_parent;  // Stack-allocated union-find for regions
   for (int i = 0; i < ncomponents; ++i) region_parent[i] = i;
 
   // Bipartiteness check using array indexed by component IDs (only for even degree)
-  array<int, MAX_TOTAL_VERTS> comp_to_color;
+  array<int, MAX_TOTAL_VERTS> comp_to_color;  // Stack-allocated color array
   if (delta_even) {
-    std::fill(comp_to_color.begin(), comp_to_color.begin() + ncomponents, -1);
+    std::fill(comp_to_color.begin(), comp_to_color.begin() + ncomponents, -1);  // -1 = unassigned, 0 = false, 1 = true
   }
 
   // Process antipodal pairs: merge regions and check bipartiteness for even degree
@@ -300,7 +300,7 @@ void Graph::isotopy_type() {
   }
 
   // Assign region IDs
-  std::fill(region.begin(), region.begin() + ncomponents, -1);
+  std::fill(region.begin(), region.begin() + ncomponents, -1);  // Fill only used portion of fixed-size array
   region_count = 0;
   for (int i = 0; i < ncomponents; ++i) {
     int region_root = find(region_parent, i);
@@ -357,12 +357,12 @@ void Graph::isotopy_type() {
   root_region = region[root];
 
   // BFS to assign region signs (2-coloring of region adjacency graph)
-  region_sign[root_region] = !delta_even;  // true for odd degree, false for even
+  region_sign[root_region] = !delta_even;  // true for odd degree, false for even (rest already zero-initialized)
 
-  array<uint8_t, MAX_TOTAL_VERTS> visited{};
+  array<uint8_t, MAX_TOTAL_VERTS> visited{};  // Stack-allocated visited flags ({} zero-initializes, 0=not visited, 1=visited)
   visited[root_region] = 1;
 
-  array<int, MAX_TOTAL_VERTS> bfs_queue;
+  array<int, MAX_TOTAL_VERTS> bfs_queue;  // Stack-allocated BFS queue (replaces vector with push_back)
   int bfs_size = 0;
   bfs_queue[bfs_size++] = root_region;
 
