@@ -210,7 +210,6 @@ TEST_CASE("Constructor: Graph from vec<Isotopy::Triangle>", "[isotopy_graph][con
   std::vector<Isotopy::Triangle> triangles = {{0,1,2}};
 
   Isotopy::Graph graph(delta, sign, triangles);
-  REQUIRE(graph.component_edges.size() >= 3);
   REQUIRE(graph.adjacency_edges.size() >= 1);
 }
 

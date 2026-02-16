@@ -111,7 +111,6 @@ void Graph::initialize(const vector<bool>& sign_vector) {
     antipodal_partner[2 * x + 1] = {aidxs[1], aidxs[3]};  // Q2 ↔ Q4
   }
 
-  component_edges.reserve(4 * ntriangles);
   adjacency_edges.reserve(4 * ntriangles);
   parent.resize(ntotalverts);
   for (int i = 0; i < ntotalverts; ++i) parent[i] = i;
@@ -133,29 +132,24 @@ void Graph::process_triangles(const vector<Triangle>& triangles) {
 
       bool v0_eq_v1 = (s0 == s1);
       bool v0_eq_v2 = (s0 == s2);
-      bool v1_eq_v2 = (s1 == s2);
 
-      if (v0_eq_v1 && v0_eq_v2 && v1_eq_v2) {
-        component_edges.push_back({qv0, qv1});
-        component_edges.push_back({qv0, qv2});
-        // component_edges.push_back({qv1, qv2});
+      if (v0_eq_v1 && v0_eq_v2) {
+        // All same sign: merge all three
+        unite(parent, rank, qv0, qv1);
+        unite(parent, rank, qv0, qv2);
+
+      } else if (v0_eq_v1) {
+        unite(parent, rank, qv0, qv1);
+        adjacency_edges.push_back({qv0, qv2});
+
+      } else if (v0_eq_v2) {
+        unite(parent, rank, qv0, qv2);
+        adjacency_edges.push_back({qv0, qv1});
 
       } else {
-        if (v0_eq_v1) {
-          component_edges.push_back({qv0, qv1});
-          adjacency_edges.push_back({qv0, qv2});
-          // adjacency_edges.push_back({qv1, qv2});
-
-        } else if (v0_eq_v2) {
-          component_edges.push_back({qv0, qv2});
-          adjacency_edges.push_back({qv0, qv1});
-          // adjacency_edges.push_back({qv1, qv2});
-
-        } else if (v1_eq_v2) {
-          component_edges.push_back({qv1, qv2});
-          adjacency_edges.push_back({qv0, qv2});
-          // adjacency_edges.push_back({qv0, qv1});
-        }
+        // v1_eq_v2 (only remaining case with booleans)
+        unite(parent, rank, qv1, qv2);
+        adjacency_edges.push_back({qv0, qv2});
       }
     }
   }
@@ -173,18 +167,9 @@ void Graph::process_edges(const vector<Edge>& edges) {
       int qv0 = quad_idxs[v0][q];
       int qv1 = quad_idxs[v1][q];
 
-      bool s0 = polarisation[qv0];
-      bool s1 = polarisation[qv1];
-
-      // Initialize parent for involved vertices
-      if (parent[qv0] == -1) parent[qv0] = qv0;
-      if (parent[qv1] == -1) parent[qv1] = qv1;
-
-      if (s0 == s1) {
-        // Same sign: component edge
-        component_edges.push_back({qv0, qv1});
+      if (polarisation[qv0] == polarisation[qv1]) {
+        unite(parent, rank, qv0, qv1);
       } else {
-        // Different sign: adjacency edge
         adjacency_edges.push_back({qv0, qv1});
       }
     }
@@ -221,18 +206,12 @@ void Graph::connected_components() {
     return;
   }
 
-  // Parent already initialized in constructor, just do unions
-  for (const auto& [u, v] : component_edges) {
-    unite(parent, rank, u, v);
-  }
-
-  // Build component mapping in a single pass
+  // Unions already performed during process_triangles/process_edges.
+  // Just assign component IDs.
   component.assign(ntotalverts, -1);
   ncomponents = 0;
 
   for (int i = 0; i < ntotalverts; ++i) {
-    if (parent[i] == -1) continue;  // Skip uninitialized vertices
-
     int root = find(parent, i);
 
     if (component[root] == -1) {
