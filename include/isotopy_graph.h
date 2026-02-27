@@ -22,7 +22,7 @@ using Adjacency = vector<vector<int>>;
 using QuadrantIndices = array<int, 4>;
 
 // Maximum supported degree for fixed-size array optimization
-static constexpr int MAX_DELTA = 12;
+static constexpr int MAX_DELTA = 50;
 static constexpr int MAX_VERTS = (MAX_DELTA + 1) * (MAX_DELTA + 2) / 2;
 static constexpr int MAX_TOTAL_VERTS = 2 * MAX_DELTA * MAX_DELTA + 2 * MAX_DELTA + 1;
 
