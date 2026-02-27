@@ -4,9 +4,20 @@ BIN_DIR = bin
 TEST_DIR = $(BIN_DIR)/tests
 BENCHMARK_DIR = $(BIN_DIR)/benchmarks
 
+# Platform detection
+UNAME_S := $(shell uname -s)
+ifeq ($(UNAME_S),Darwin)
+    TARGET = libisotopy.dylib
+    SDK_PATH = /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk
+    CXXFLAGS += -isysroot $(SDK_PATH) -isystem $(SDK_PATH)/usr/include/c++/v1
+    RPATH_FLAG = -Wl,-rpath,@loader_path/../..
+else
+    TARGET = libisotopy.so
+    RPATH_FLAG = -Wl,-rpath,\$$ORIGIN/../..
+endif
+
 SRC = src/isotopy_graph.cpp
 OBJ = obj/isotopy_graph.o
-TARGET = libisotopy.so
 
 TEST_SRC = tests/isotopy_graph.cpp
 TEST_OBJ = $(TEST_SRC:.cpp=.o)
@@ -30,7 +41,7 @@ test: $(TEST_BIN)
 	./$(TEST_BIN)
 
 $(TEST_BIN): $(TARGET) $(TEST_OBJ) | $(TEST_DIR)
-	$(CXX) -o $@ $(TEST_OBJ) -L. -Wl,-rpath,\$$ORIGIN/../.. -lisotopy
+	$(CXX) -o $@ $(TEST_OBJ) -L. $(RPATH_FLAG) -lisotopy
 
 
 TEST_BATCH_SRC = tests/isotopy_graph_batch.cpp

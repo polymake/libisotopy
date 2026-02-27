@@ -39,6 +39,10 @@ using std::out_of_range;
 namespace Isotopy {
 
 void Graph::initialize(const vector<bool>& sign_vector) {
+  if (delta > MAX_DELTA) {
+    throw std::invalid_argument("delta=" + std::to_string(delta) + " exceeds MAX_DELTA=" + std::to_string(MAX_DELTA));
+  }
+
   delta_even  = (delta % 2 == 0);
   nverts      = num_vertices(delta);
   ntotalverts = num_total_vertices(delta);
@@ -50,9 +54,7 @@ void Graph::initialize(const vector<bool>& sign_vector) {
   int q3_offset = q2_offset + nverts - delta - 1;
   int q4_offset = q3_offset + nverts - delta - 1;
 
-  polarisation = sign_vector;       // Copy Q1 signs
-  polarisation.resize(ntotalverts); // Extend for Q2-Q4
-  quad_idxs.resize(nverts);
+  for (int i = 0; i < nverts; ++i) polarisation[i] = sign_vector[i];  // Copy Q1 signs (rest already zero-initialized)
   antipodal_partner.resize(2 * (delta + 1));
 
   int idx = 0;
@@ -111,14 +113,8 @@ void Graph::initialize(const vector<bool>& sign_vector) {
     antipodal_partner[2 * x + 1] = {aidxs[1], aidxs[3]};  // Q2 ↔ Q4
   }
 
-  component_edges.reserve(4 * ntriangles);
   adjacency_edges.reserve(4 * ntriangles);
-  parent.assign(ntotalverts, -1);
-  rank.assign(ntotalverts, 0);
-  
-  for (int i = 0; i < ntotalverts; ++i) {
-    parent[i] = i;
-  }
+  for (int i = 0; i < ntotalverts; ++i) parent[i] = i;  // Initialize union-find: each vertex is its own parent (rank already zero-initialized)
 }
 
 void Graph::process_triangles(const vector<Triangle>& triangles) {
@@ -136,29 +132,24 @@ void Graph::process_triangles(const vector<Triangle>& triangles) {
 
       bool v0_eq_v1 = (s0 == s1);
       bool v0_eq_v2 = (s0 == s2);
-      bool v1_eq_v2 = (s1 == s2);
 
-      if (v0_eq_v1 && v0_eq_v2 && v1_eq_v2) {
-        component_edges.push_back({qv0, qv1});
-        component_edges.push_back({qv0, qv2});
-        // component_edges.push_back({qv1, qv2});
+      if (v0_eq_v1 && v0_eq_v2) {
+        // All same sign: merge all three
+        unite(parent, rank, qv0, qv1);
+        unite(parent, rank, qv0, qv2);
+
+      } else if (v0_eq_v1) {
+        unite(parent, rank, qv0, qv1);
+        adjacency_edges.push_back({qv0, qv2});
+
+      } else if (v0_eq_v2) {
+        unite(parent, rank, qv0, qv2);
+        adjacency_edges.push_back({qv0, qv1});
 
       } else {
-        if (v0_eq_v1) {
-          component_edges.push_back({qv0, qv1});
-          adjacency_edges.push_back({qv0, qv2});
-          // adjacency_edges.push_back({qv1, qv2});
-
-        } else if (v0_eq_v2) {
-          component_edges.push_back({qv0, qv2});
-          adjacency_edges.push_back({qv0, qv1});
-          // adjacency_edges.push_back({qv1, qv2});
-
-        } else if (v1_eq_v2) {
-          component_edges.push_back({qv1, qv2});
-          adjacency_edges.push_back({qv0, qv2});
-          // adjacency_edges.push_back({qv0, qv1});
-        }
+        // v1_eq_v2 (only remaining case with booleans)
+        unite(parent, rank, qv1, qv2);
+        adjacency_edges.push_back({qv0, qv2});
       }
     }
   }
@@ -176,18 +167,9 @@ void Graph::process_edges(const vector<Edge>& edges) {
       int qv0 = quad_idxs[v0][q];
       int qv1 = quad_idxs[v1][q];
 
-      bool s0 = polarisation[qv0];
-      bool s1 = polarisation[qv1];
-
-      // Initialize parent for involved vertices
-      if (parent[qv0] == -1) parent[qv0] = qv0;
-      if (parent[qv1] == -1) parent[qv1] = qv1;
-
-      if (s0 == s1) {
-        // Same sign: component edge
-        component_edges.push_back({qv0, qv1});
+      if (polarisation[qv0] == polarisation[qv1]) {
+        unite(parent, rank, qv0, qv1);
       } else {
-        // Different sign: adjacency edge
         adjacency_edges.push_back({qv0, qv1});
       }
     }
@@ -220,22 +202,16 @@ Graph::Graph(int delta, const vector<bool>& sign_vector, const set<set<int>>& tr
 
 void Graph::connected_components() {
   //If already computed return
-  if (!component.empty()) {
+  if (components_computed) {
     return;
   }
 
-  // Parent already initialized in constructor, just do unions
-  for (const auto& [u, v] : component_edges) {
-    unite(parent, rank, u, v);
-  }
-
-  // Build component mapping in a single pass
-  component.assign(ntotalverts, -1);
+  // Unions already performed during process_triangles/process_edges.
+  // Just assign component IDs.
+  std::fill(component.begin(), component.begin() + ntotalverts, -1);  // Fill only used portion of fixed-size array
   ncomponents = 0;
 
   for (int i = 0; i < ntotalverts; ++i) {
-    if (parent[i] == -1) continue;  // Skip uninitialized vertices
-
     int root = find(parent, i);
 
     if (component[root] == -1) {
@@ -244,6 +220,7 @@ void Graph::connected_components() {
 
     component[i] = component[root];
   }
+  components_computed = true;
 }
 
 void Graph::isotopy_type() {
@@ -261,13 +238,13 @@ void Graph::isotopy_type() {
   n_regions = delta_even ? -1 : 0;
 
   // Use union-find to merge antipodal components into regions
-  vector<int> region_parent(ncomponents);
+  array<int, MAX_TOTAL_VERTS> region_parent;  // Stack-allocated union-find for regions
   for (int i = 0; i < ncomponents; ++i) region_parent[i] = i;
 
-  // Bipartiteness check using vector indexed by component IDs (only for even degree)
-  vector<int> comp_to_color;
+  // Bipartiteness check using array indexed by component IDs (only for even degree)
+  array<int, MAX_TOTAL_VERTS> comp_to_color;  // Stack-allocated color array
   if (delta_even) {
-    comp_to_color.assign(ncomponents, -1);  // -1 = unassigned, 0 = false, 1 = true
+    std::fill(comp_to_color.begin(), comp_to_color.begin() + ncomponents, -1);  // -1 = unassigned, 0 = false, 1 = true
   }
 
   // Process antipodal pairs: merge regions and check bipartiteness for even degree
@@ -323,7 +300,7 @@ void Graph::isotopy_type() {
   }
 
   // Assign region IDs
-  region.assign(ncomponents, -1);
+  std::fill(region.begin(), region.begin() + ncomponents, -1);  // Fill only used portion of fixed-size array
   region_count = 0;
   for (int i = 0; i < ncomponents; ++i) {
     int region_root = find(region_parent, i);
@@ -380,18 +357,17 @@ void Graph::isotopy_type() {
   root_region = region[root];
 
   // BFS to assign region signs (2-coloring of region adjacency graph)
-  region_sign.assign(region_count, false);
-  region_sign[root_region] = !delta_even;  // true for odd degree, false for even
+  region_sign[root_region] = !delta_even;  // true for odd degree, false for even (rest already zero-initialized)
 
-  vector<bool> visited(region_count, false);
-  visited[root_region] = true;
+  array<uint8_t, MAX_TOTAL_VERTS> visited{};  // Stack-allocated visited flags ({} zero-initializes, 0=not visited, 1=visited)
+  visited[root_region] = 1;
 
-  vector<int> queue;
-  queue.reserve(region_count);
-  queue.push_back(root_region);
+  array<int, MAX_TOTAL_VERTS> bfs_queue;  // Stack-allocated BFS queue (replaces vector with push_back)
+  int bfs_size = 0;
+  bfs_queue[bfs_size++] = root_region;
 
-  for (size_t i = 0; i < queue.size(); ++i) {
-    int current = queue[i];
+  for (int i = 0; i < bfs_size; ++i) {
+    int current = bfs_queue[i];
 
     if (region_sign[current]) {
       p_regions++;
@@ -401,9 +377,9 @@ void Graph::isotopy_type() {
 
     for (int neighbor : region_adjacency[current]) {
       if (!visited[neighbor]) {
-        visited[neighbor] = true;
+        visited[neighbor] = 1;
         region_sign[neighbor] = !region_sign[current];
-        queue.push_back(neighbor);
+        bfs_queue[bfs_size++] = neighbor;
       }
     }
   }

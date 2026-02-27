@@ -1,6 +1,7 @@
 #pragma once
 
 #include <array>
+#include <cstdint>
 #include <map>
 #include <set>
 #include <string>
@@ -20,6 +21,11 @@ using Edge = pair<int, int>;
 using Adjacency = vector<vector<int>>;
 using QuadrantIndices = array<int, 4>;
 
+// Maximum supported degree for fixed-size array optimization
+static constexpr int MAX_DELTA = 50;
+static constexpr int MAX_VERTS = (MAX_DELTA + 1) * (MAX_DELTA + 2) / 2;
+static constexpr int MAX_TOTAL_VERTS = 2 * MAX_DELTA * MAX_DELTA + 2 * MAX_DELTA + 1;
+
 /**
  * @brief Represents an isotopy type as a graph and provides methods for isotopy type computation.
  *
@@ -35,26 +41,27 @@ struct Graph {
   int ncomponents = 0;  ///< Number of connected components (after connected_components()).
 
   // Quadrant-based representation
-  vector<bool> polarisation; ///< polarisation[vertex_idx] gives the sign of vertex vertex_idx
-  vector<QuadrantIndices> quad_idxs; ///< quad_idxs[i][q] gives the global index of vertex i reflected to quadrant q
+  array<uint8_t, MAX_TOTAL_VERTS> polarisation{}; ///< polarisation[vertex_idx] gives the sign of vertex vertex_idx ({} zero-initializes)
+  array<QuadrantIndices, MAX_VERTS> quad_idxs{};  ///< quad_idxs[i][q] gives the global index of vertex i reflected to quadrant q ({} default-initializes)
 
   // Edge lists for component analysis
-  vector<Edge> component_edges; ///< Edges for connected component analysis (same-sign edges)
+  vector<Edge> component_edges; ///< Edges for connected component analysis (same-sign edges, no longer populated)
   vector<Edge> adjacency_edges; ///< Edges for component adjacency (different-sign edges)
 
   // Connected component information
-  vector<int> parent; ///< Union-find parent array for component construction
-  vector<int> rank;   ///< Union-find rank array for union-by-rank optimization
+  array<int, MAX_TOTAL_VERTS> parent{}; ///< Union-find parent array for component construction ({} zero-initializes, overwritten in initialize())
+  array<int, MAX_TOTAL_VERTS> rank{};   ///< Union-find rank array for union-by-rank optimization ({} zero-initializes)
   int root = -1; ///< Root component index.
-  vector<int> component; ///< component[i] gives the component index of vertex i.
+  array<int, MAX_TOTAL_VERTS> component{}; ///< component[i] gives the component index of vertex i. ({} zero-initializes)
+  bool components_computed = false; ///< Guard for connected_components() idempotency (replaces component.empty() check)
   Adjacency component_adjacency; ///< component_adjacency[c] gives the set of components adjacent to component c.
 
   // Region information
   int root_region = -1; ///< Region index of the root component.
   int region_count = 0; ///< Total number of regions.
-  vector<int> region; ///< region[c] gives the region index of component c.
+  array<int, MAX_TOTAL_VERTS> region{}; ///< region[c] gives the region index of component c. ({} zero-initializes)
   Adjacency region_adjacency; ///< region_adjacency[r] gives the set of regions adjacent to region r.
-  vector<bool> region_sign; ///< region_sign[r] gives the sign of region r (true for positive, false for negative).
+  array<uint8_t, MAX_TOTAL_VERTS> region_sign{}; ///< region_sign[r] gives the sign of region r ({} zero-initializes, 0=negative, 1=positive)
 
   int p_regions = 0; ///< Number of positive regions.
   int n_regions = -1; ///< Number of negative regions.
@@ -237,8 +244,9 @@ struct Graph {
   };
 
 private:
-  // Union-find helpers for arbitrary parent arrays
-  int find(vector<int>& parent_array, int x) {
+  // Union-find helpers templated to work with both array and vector
+  template<typename T>
+  static int find(T& parent_array, int x) {
     while (parent_array[x] != x) {
       parent_array[x] = parent_array[parent_array[x]];
       x = parent_array[x];
@@ -246,13 +254,15 @@ private:
     return x;
   }
 
-  void unite(vector<int>& parent_array, int x, int y) {
+  template<typename T>
+  static void unite(T& parent_array, int x, int y) {
     int px = find(parent_array, x);
     int py = find(parent_array, y);
     if (px != py) parent_array[py] = px;
   }
 
-  void unite(vector<int>& parent_array, vector<int>& rank_array, int x, int y) {
+  template<typename T, typename R>
+  static void unite(T& parent_array, R& rank_array, int x, int y) {
     int px = find(parent_array, x);
     int py = find(parent_array, y);
     if (px != py) {

@@ -210,7 +210,6 @@ TEST_CASE("Constructor: Graph from vec<Isotopy::Triangle>", "[isotopy_graph][con
   std::vector<Isotopy::Triangle> triangles = {{0,1,2}};
 
   Isotopy::Graph graph(delta, sign, triangles);
-  REQUIRE(graph.component_edges.size() >= 3);
   REQUIRE(graph.adjacency_edges.size() >= 1);
 }
 
@@ -454,4 +453,14 @@ TEST_CASE("Isotopy::triangles_to_edges - Invalid triangle", "[isotopy]") {
     std::set<std::set<int>> triangles = {{0, 1, 2, 3}};
 
     REQUIRE_THROWS_AS(Isotopy::triangles_to_edges(delta, triangles), std::invalid_argument);
+}
+
+TEST_CASE("Graph constructor - delta exceeds MAX_DELTA", "[isotopy][bounds]") {
+    // Attempting to construct a graph with delta > MAX_DELTA should throw
+    int delta = Isotopy::MAX_DELTA + 1;  // Exceeds MAX_DELTA
+    int nverts = Isotopy::num_vertices(delta);
+    std::vector<bool> signs(nverts, false);
+    std::vector<Isotopy::Triangle> triangles = {{0, 1, 2}};
+
+    REQUIRE_THROWS_AS(Isotopy::Graph(delta, signs, triangles), std::invalid_argument);
 }
