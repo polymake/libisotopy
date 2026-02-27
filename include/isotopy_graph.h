@@ -41,27 +41,27 @@ struct Graph {
   int ncomponents = 0;  ///< Number of connected components (after connected_components()).
 
   // Quadrant-based representation
-  array<uint8_t, MAX_TOTAL_VERTS> polarisation{}; ///< polarisation[vertex_idx] gives the sign of vertex vertex_idx ({} zero-initializes)
-  array<QuadrantIndices, MAX_VERTS> quad_idxs{};  ///< quad_idxs[i][q] gives the global index of vertex i reflected to quadrant q ({} default-initializes)
+  array<uint8_t, MAX_TOTAL_VERTS> polarisation; ///< polarisation[vertex_idx] gives the sign of vertex vertex_idx (initialized in initialize())
+  array<QuadrantIndices, MAX_VERTS> quad_idxs;  ///< quad_idxs[i][q] gives the global index of vertex i reflected to quadrant q (initialized in initialize())
 
   // Edge lists for component analysis
   vector<Edge> component_edges; ///< Edges for connected component analysis (same-sign edges, no longer populated)
   vector<Edge> adjacency_edges; ///< Edges for component adjacency (different-sign edges)
 
   // Connected component information
-  array<int, MAX_TOTAL_VERTS> parent{}; ///< Union-find parent array for component construction ({} zero-initializes, overwritten in initialize())
-  array<int, MAX_TOTAL_VERTS> rank{};   ///< Union-find rank array for union-by-rank optimization ({} zero-initializes)
+  array<int, MAX_TOTAL_VERTS> parent; ///< Union-find parent array for component construction (initialized in initialize())
+  array<int, MAX_TOTAL_VERTS> rank;   ///< Union-find rank array for union-by-rank optimization (initialized in initialize())
   int root = -1; ///< Root component index.
-  array<int, MAX_TOTAL_VERTS> component{}; ///< component[i] gives the component index of vertex i. ({} zero-initializes)
+  array<int, MAX_TOTAL_VERTS> component; ///< component[i] gives the component index of vertex i. (initialized in connected_components())
   bool components_computed = false; ///< Guard for connected_components() idempotency (replaces component.empty() check)
   Adjacency component_adjacency; ///< component_adjacency[c] gives the set of components adjacent to component c.
 
   // Region information
   int root_region = -1; ///< Region index of the root component.
   int region_count = 0; ///< Total number of regions.
-  array<int, MAX_TOTAL_VERTS> region{}; ///< region[c] gives the region index of component c. ({} zero-initializes)
+  array<int, MAX_TOTAL_VERTS> region; ///< region[c] gives the region index of component c. (initialized in isotopy_type())
   Adjacency region_adjacency; ///< region_adjacency[r] gives the set of regions adjacent to region r.
-  array<uint8_t, MAX_TOTAL_VERTS> region_sign{}; ///< region_sign[r] gives the sign of region r ({} zero-initializes, 0=negative, 1=positive)
+  array<uint8_t, MAX_TOTAL_VERTS> region_sign; ///< region_sign[r] gives the sign of region r (initialized in isotopy_type(), 0=negative, 1=positive)
 
   int p_regions = 0; ///< Number of positive regions.
   int n_regions = -1; ///< Number of negative regions.

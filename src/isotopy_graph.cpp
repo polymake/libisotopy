@@ -54,7 +54,7 @@ void Graph::initialize(const vector<bool>& sign_vector) {
   int q3_offset = q2_offset + nverts - delta - 1;
   int q4_offset = q3_offset + nverts - delta - 1;
 
-  for (int i = 0; i < nverts; ++i) polarisation[i] = sign_vector[i];  // Copy Q1 signs (rest already zero-initialized)
+  for (int i = 0; i < nverts; ++i) polarisation[i] = sign_vector[i];  // Copy Q1 signs (Q2-Q4 set below by quadrant reflection)
   antipodal_partner.resize(2 * (delta + 1));
 
   int idx = 0;
@@ -114,7 +114,8 @@ void Graph::initialize(const vector<bool>& sign_vector) {
   }
 
   adjacency_edges.reserve(4 * ntriangles);
-  for (int i = 0; i < ntotalverts; ++i) parent[i] = i;  // Initialize union-find: each vertex is its own parent (rank already zero-initialized)
+  for (int i = 0; i < ntotalverts; ++i) parent[i] = i;  // Initialize union-find: each vertex is its own parent
+  std::fill(rank.begin(), rank.begin() + ntotalverts, 0);  // Zero-initialize rank for used portion only
 }
 
 void Graph::process_triangles(const vector<Triangle>& triangles) {
@@ -357,9 +358,11 @@ void Graph::isotopy_type() {
   root_region = region[root];
 
   // BFS to assign region signs (2-coloring of region adjacency graph)
-  region_sign[root_region] = !delta_even;  // true for odd degree, false for even (rest already zero-initialized)
+  std::fill(region_sign.begin(), region_sign.begin() + region_count, 0);  // Zero-initialize only used portion
+  region_sign[root_region] = !delta_even;  // true for odd degree, false for even
 
-  array<uint8_t, MAX_TOTAL_VERTS> visited{};  // Stack-allocated visited flags ({} zero-initializes, 0=not visited, 1=visited)
+  array<uint8_t, MAX_TOTAL_VERTS> visited;  // Stack-allocated visited flags
+  std::fill(visited.begin(), visited.begin() + region_count, 0);  // Zero-initialize only used portion
   visited[root_region] = 1;
 
   array<int, MAX_TOTAL_VERTS> bfs_queue;  // Stack-allocated BFS queue (replaces vector with push_back)
