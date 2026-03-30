@@ -1,5 +1,6 @@
 CXX = g++
-CXXFLAGS = -std=c++20 -Wall -Wextra -O2 -Iinclude -fPIC
+MAX_DELTA ?= 20
+CXXFLAGS = -std=c++20 -Wall -Wextra -O2 -Iinclude -fPIC -DMAX_DELTA=$(MAX_DELTA)
 BIN_DIR = bin
 TEST_DIR = $(BIN_DIR)/tests
 BENCHMARK_DIR = $(BIN_DIR)/benchmarks
