@@ -389,6 +389,8 @@ using Isotopy::vector;
 using Isotopy::string;
 using Isotopy::pair;
 
+vector<pair<int, int>> get_random_triangulation(int delta);
+
 // Backwards-compatible helper (master API)
 std::map<std::pair<int,int>, int> get_pt2int(int delta);
 

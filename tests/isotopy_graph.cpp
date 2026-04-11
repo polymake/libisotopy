@@ -21,6 +21,8 @@ TEST_CASE("Constructor: Graph from set<set<int>> (triangulation)", "[isotopy_gra
   std::string expected_viro = "<1<1<1<1>>>>";
   REQUIRE(graph.viro_notation() == expected_viro);
   std::map<std::pair<int,int>, int> pt_map = Utils::get_pt2int(delta);
+  auto rt = Utils::get_random_triangulation(8);
+  REQUIRE(rt.size() == 108);
   REQUIRE(graph.component[pt_map.at(std::make_pair(0,0))] == graph.component[pt_map.at(std::make_pair(0,1))]);
   REQUIRE(graph.component[pt_map.at(std::make_pair(0,0))] == graph.component[pt_map.at(std::make_pair(1,0))]);
   REQUIRE(graph.component[pt_map.at(std::make_pair(0,-1))] == graph.component[pt_map.at(std::make_pair(1,-1))]);

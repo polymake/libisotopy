@@ -8,6 +8,7 @@
 #include <string>
 #include <cctype>
 #include <mutex>
+#include <numeric>
 
 //For the Utils
 #include <cstdint>
@@ -614,6 +615,81 @@ pair<int,int> idx_to_point(int delta, int idx) {
 }  // namespace Isotopy
 
 namespace Utils {
+
+
+// Copied from hilbert_encoding.pl
+int orientation(int i, int j, int k, const map<int, vector<int>>& int2pt){
+  const vector<int>& p0(int2pt.at(i)), p1(int2pt.at(j)), p2(int2pt.at(k));
+  int det=0;
+  for(int a = 0; a<3; a++){
+    det += p0[a] * p1[(a+1)%3] * p2[(a+2)%3];
+    det -= p0[a] * p1[(a+2)%3] * p2[(a+1)%3];
+  }
+  if(det == 0) return 0;
+  else if(det >0) return 1;
+  else return -1;
+}
+
+bool segments_intersect(int i, int j, int k, int l, const map<int, vector<int>>& int2pt){
+  int ijk = orientation(i, j, k, int2pt);
+  if(ijk == 0) return false;
+  int ijl = orientation(i, j, l, int2pt);
+  if(ijk == 0 || ijk == ijl) return false;
+  int kli = orientation(k, l, i, int2pt);
+  if(kli ==0) return false;
+  int klj = orientation(k, l, j, int2pt);
+  if(klj == 0 || kli == klj) return false;
+  return true;
+}
+
+
+void remove_intersecting_edges(vector<pair<int, int>>& edges, const pair<int, int>& edge, const map<int, vector<int>>& int2pt){
+  edges.erase(
+    std::remove_if(edges.begin(), edges.end(),
+        [&](const std::pair<int,int>& x) {
+            return segments_intersect(x.first, x.second, edge.first, edge.second, int2pt);
+        }),
+    edges.end()
+);
+}
+
+vector<pair<int, int>> get_random_triangulation(int delta) {
+// void get_random_triangulation(int delta) {
+  map<vector<int>, int> pt2int;
+  map<int, vector<int>> int2pt;
+  int ptct = 0;
+  for(int x = 0; x<=delta; x++){
+    for(int y = 0; y<=delta-x; y++){
+      vector<int> pt{x,y,1};
+      pt2int[pt] = ptct;
+      int2pt[ptct] = pt;
+      ptct++;
+    }
+  }
+  vector<pair<int, int>> initial_edges;
+  for(int i=0; i<ptct; i++){
+    for(int j=i+1; j<ptct; j++){
+      vector<int> p0(int2pt[i]), p1(int2pt[j]);
+      int check = std::gcd(p0[0]-p1[0], p0[1]-p1[1]);
+      if(check == 1){
+        initial_edges.push_back(pair<int, int>{i, j});
+      }
+    }
+  }
+  // std::cout << "Length after init: " << initial_edges.size() << std::endl;
+  vector<pair<int, int>> result;
+  while(!initial_edges.empty()){
+    auto ne = initial_edges.back();
+    initial_edges.pop_back();
+    result.push_back(ne);
+    // std::cout << "Adding edge: " << ne.first << " " << ne.second << std::endl;
+    // std::cout << "Result length: " << result.size() << std::endl;
+    remove_intersecting_edges(initial_edges, ne, int2pt);
+  }
+  // int target = 3 * delta + (3 * (delta * delta - delta)) / 2;
+  // std::cout << "Target is " << target << std::endl;
+  return result;
+}
 
 // map<pair<int,int>, int> get_pt2int(int delta) {
 //   map<pair<int,int>, int> pt2int;
