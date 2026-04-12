@@ -611,6 +611,304 @@ pair<int,int> idx_to_point(int delta, int idx) {
   return coords[idx];
 }
 
+int original_idx(int delta, int idx) {
+  const auto& coords = get_coord_table(delta);
+  auto [x, y] = coords[idx];
+  return point_to_idx(delta, abs(x), abs(y));
+}
+
+void Graph::apply_flip(const Edge& old_edge, const Edge& new_edge) {
+  auto replace_or_move_edge = [](vector<pair<int,int>>& from, vector<pair<int,int>>& to, Edge old_edge, Edge new_edge, bool replace_only) {
+    auto is_old_edge = [&](const pair<int,int>& e) {
+      return (e == old_edge) || (e.first == old_edge.second && e.second == old_edge.first);
+    };
+
+    bool found = false;
+    for (auto& e : from) {
+      if (is_old_edge(e)) {
+        found = true;
+        if (replace_only) {
+          e = new_edge;
+        }
+      }
+    }
+    if (!replace_only) {
+      from.erase(std::remove_if(from.begin(), from.end(), is_old_edge), from.end());
+      to.push_back(new_edge);
+    } else if (!found) {
+      from.push_back(new_edge);
+    }
+  };
+
+  for (int q = 0; q < 4; ++q) {
+    int old_v0 = quad_idxs[old_edge.first][q];
+    int old_v1 = quad_idxs[old_edge.second][q];
+    bool old_s0 = polarisation[old_v0];
+    bool old_s1 = polarisation[old_v1];
+    int new_v0 = quad_idxs[new_edge.first][q];
+    int new_v1 = quad_idxs[new_edge.second][q];
+    bool new_s0 = polarisation[new_v0];
+    bool new_s1 = polarisation[new_v1];
+
+    if (old_s0 == old_s1 && new_s0 == new_s1) {
+      // Both are component edges: replace
+      replace_or_move_edge(component_edges, adjacency_edges, Edge{old_v0, old_v1}, Edge{new_v0, new_v1}, true);
+    } else if (old_s0 != old_s1 && new_s0 != new_s1) {
+      // Both are adjacency edges: replace
+      replace_or_move_edge(adjacency_edges, component_edges, Edge{old_v0, old_v1}, Edge{new_v0, new_v1}, true);
+    } else if (old_s0 == old_s1 && new_s0 != new_s1) {
+      // Old is component, new is adjacency: move
+      replace_or_move_edge(component_edges, adjacency_edges, Edge{old_v0, old_v1}, Edge{new_v0, new_v1}, false);
+    } else if (old_s0 != old_s1 && new_s0 == new_s1) {
+      // Old is adjacency, new is component: move
+      replace_or_move_edge(adjacency_edges, component_edges, Edge{old_v0, old_v1}, Edge{new_v0, new_v1}, false);
+    }
+  }
+  
+  invalidate_cache();
+}
+
+void Graph::invalidate_cache() {
+  // Reset union-find and rebuild from current triangulation + signs.
+  // master's connected_components() relies on unions pre-built by process_triangles,
+  // so we must re-run it here rather than leaving parent in identity state.
+  component_edges.clear();
+  adjacency_edges.clear();
+  for (int i = 0; i < ntotalverts; ++i) { parent[i] = i; rank[i] = 0; }
+  if (!tri_list.empty()) process_triangles(tri_list);
+  // Reset result caches
+  components_computed = false;
+  region_adjacency.clear();
+  p_regions = 0;
+  n_regions = -1;
+  root = -1;
+  root_region = -1;
+  region_count = 0;
+}
+
+void Graph::prepare(const vector<Triangle>& triangles) {
+
+  tri_list = triangles;
+
+  // Triangles need to be counter clockwise oriented
+  for (auto& tri : tri_list) {
+    auto [x0, y0] = idx_to_point(delta, tri[0]);
+    auto [x1, y1] = idx_to_point(delta, tri[1]);
+    auto [x2, y2] = idx_to_point(delta, tri[2]);
+    int cross = (x1-x0)*(y2-y0) - (y1-y0)*(x2-x0);
+    if (cross < 0) swap(tri[1], tri[2]);
+  }
+
+  int n = static_cast<int>(tri_list.size());
+  half_edges.resize(3 * n);
+  vertex_he.assign(nverts, -1);
+
+  // Initialise each triangle's three half-edges
+  for (int i = 0; i < n; ++i) {
+    auto [v0, v1, v2] = tri_list[i];
+    half_edges[3*i]   = {v0, -1, 3*i+1, 3*i+2, i};
+    half_edges[3*i+1] = {v1, -1, 3*i+2, 3*i+0, i};
+    half_edges[3*i+2] = {v2, -1, 3*i+0, 3*i+1, i};
+  }
+
+  he_map.clear();
+  for (int k = 0; k < 3*n; ++k) {
+    int dest = half_edges[half_edges[k].next].origin;
+    he_map[{half_edges[k].origin, dest}] = k;
+  }
+
+  // Link twins
+  for (int k = 0; k < 3*n; ++k) {
+    int dest = half_edges[half_edges[k].next].origin;
+    auto it = he_map.find({dest, half_edges[k].origin});
+    if (it != he_map.end()) {
+      half_edges[k].twin = it->second;
+    }
+  }
+
+  // One outgoing half-edge per vertex
+  for (int k = 0; k < 3*n; ++k) {
+    vertex_he[half_edges[k].origin] = k;
+  }
+
+  // Build normalized edge set
+  edge_set.clear();
+  for (int k = 0; k < 3*n; ++k) {
+    int u = half_edges[k].origin;
+    int v = half_edges[half_edges[k].next].origin;
+    edge_set.insert(u < v ? Edge{u, v} : Edge{v, u});
+  }
+
+  // Verify: all different-sign (adjacency) edges must appear in the supplied triangulation.
+  for (const auto& e : adjacency_edges) {
+    int u = original_idx(delta, e.first);
+    int v = original_idx(delta, e.second);
+    Edge norm = (u < v) ? Edge{u, v} : Edge{v, u};
+    if (!edge_set.count(norm))
+      throw std::invalid_argument("prepare(): triangulation edge not found in current graph structure");
+  }
+
+  // I cleanly rebuild the component_edges and adjacency_edges sets, pretty sure that this is unnecessary could be removed in the future.
+  set<Edge> new_component_edges;
+  set<Edge> new_adjacency_edges;
+  for (const auto& tri : tri_list) {
+    for (auto [a, b] : {pair{tri[0],tri[1]}, pair{tri[1],tri[2]}, pair{tri[2],tri[0]}}) {
+      for (int q = 0; q < 4; ++q) {
+        int qa = quad_idxs[a][q];
+        int qb = quad_idxs[b][q];
+        int sign_a = polarisation[qa];
+        int sign_b = polarisation[qb];
+        Edge norm_q = (qa < qb) ? Edge{qa, qb} : Edge{qb, qa};
+      if (sign_a == sign_b) {
+        new_component_edges.insert(norm_q);
+      } else {
+        new_adjacency_edges.insert(norm_q);
+      }
+      }
+    }
+  }
+  component_edges.assign(new_component_edges.begin(), new_component_edges.end());
+  adjacency_edges.assign(new_adjacency_edges.begin(), new_adjacency_edges.end());
+
+}
+
+bool Graph::is_flippable(const Edge& edge) {
+  // Find correct half-edge
+  auto it = he_map.find({edge.first, edge.second});
+  if (it == he_map.end()) it = he_map.find({edge.second, edge.first});
+  if (it == he_map.end()) return false;
+
+  int hei = it->second;
+  int tw  = half_edges[hei].twin;
+  if (tw < 0) return false;
+  if (half_edges[hei].face < 0 || half_edges[tw].face < 0) return false;
+
+  // The 4 vertices of the quad, ordered [u, op1, v, op2] for convexity check
+  int u   = half_edges[hei].origin;
+  int v   = half_edges[tw].origin;
+  int op1 = half_edges[half_edges[hei].prev].origin;
+  int op2 = half_edges[half_edges[tw].prev].origin;
+
+  auto [x1, y1] = idx_to_point(delta, u);
+  auto [x2, y2] = idx_to_point(delta, op1);
+  auto [x3, y3] = idx_to_point(delta, v);
+  auto [x4, y4] = idx_to_point(delta, op2);
+  array<pair<int,int>, 4> pts = {{{x1,y1},{x2,y2},{x3,y3},{x4,y4}}};
+
+  // All four points must be distinct
+  for (int i = 0; i < 4; ++i)
+    for (int j = i+1; j < 4; ++j)
+      if (pts[i] == pts[j]) return false;
+
+  // No collinear triple, and all cross products must have the same sign (convex quad)
+  int prev_cross = 0;
+  for (int i = 0; i < 4; ++i) {
+    int j = (i+1)%4, k = (i+2)%4;
+    int area = pts[i].first * (pts[j].second - pts[k].second)
+             + pts[j].first * (pts[k].second - pts[i].second)
+             + pts[k].first * (pts[i].second - pts[j].second);
+    if (area == 0) return false;
+    if (prev_cross == 0) prev_cross = area;
+    else if ((area > 0) != (prev_cross > 0)) return false;
+  }
+  return true;
+}
+
+void Graph::update_dcel(int hei, int tw, int u, int v, int w, int x) {
+  // Named indices for the 6 half-edges involved in the flip:
+  //   hei = u→v (being replaced by x→w)
+  //   tw  = v→u (being replaced by w→x)
+  //   bc  = v→w (next of hei)
+  //   ca  = w→u (prev of hei)
+  //   ad  = u→x (next of tw)
+  //   db  = x→v (prev of tw)
+  int bc = half_edges[hei].next;
+  int ca = half_edges[hei].prev;
+  int ad = half_edges[tw].next;
+  int db = half_edges[tw].prev;
+
+  int f1 = half_edges[hei].face;
+  int f2 = half_edges[tw].face;
+
+  // Repurpose hei as x→w and tw as w→x
+  half_edges[hei].origin = x;
+  half_edges[hei].next   = ca;
+  half_edges[hei].prev   = ad;
+  // twin and face stay the same
+
+  half_edges[tw].origin = w;
+  half_edges[tw].next   = db;
+  half_edges[tw].prev   = bc;
+  // twin and face stay the same
+
+  // Relink the four surrounding half-edges
+  half_edges[bc].next = tw;  half_edges[bc].prev = db;
+  half_edges[ca].next = ad;  half_edges[ca].prev = hei;
+  half_edges[ad].next = hei; half_edges[ad].prev = ca;
+  half_edges[db].next = bc;  half_edges[db].prev = tw;
+
+  // ad and bc change faces
+  half_edges[ad].face = f1;
+  half_edges[bc].face = f2;
+
+  // Update tri_list
+  tri_list[f1] = {u, x, w};
+  tri_list[f2] = {v, w, x};
+
+  // Update vertex_he: u and v lost their outgoing half-edge
+  if (vertex_he[u] == hei) vertex_he[u] = ad;
+  if (vertex_he[v] == tw)  vertex_he[v] = bc;
+  vertex_he[x] = hei;  // hei now has origin x
+  vertex_he[w] = tw;   // tw now has origin w
+
+  // Update he_map
+  he_map.erase({u, v});
+  he_map.erase({v, u});
+  he_map[{x, w}] = hei;
+  he_map[{w, x}] = tw;
+
+  // Update edge_set
+  Edge old_norm = (u < v) ? Edge{u, v} : Edge{v, u};
+  Edge new_norm = (w < x) ? Edge{w, x} : Edge{x, w};
+  edge_set.erase(old_norm);
+  edge_set.insert(new_norm);
+}
+
+vector<Edge> Graph::flippable_edges() {
+  vector<Edge> result;
+  for (const auto& e : edge_set)
+    if (is_flippable(e)) result.push_back(e);
+  return result;
+}
+
+void Graph::update_edge(const Edge& edge) {
+  if (!is_flippable(edge)) return;
+
+  auto it = he_map.find({edge.first, edge.second});
+  if (it == he_map.end()) it = he_map.find({edge.second, edge.first});
+
+  int hei = it->second;
+  int tw  = half_edges[hei].twin;
+  int u   = half_edges[hei].origin;
+  int v   = half_edges[tw].origin;
+  int w   = half_edges[half_edges[hei].prev].origin;
+  int x   = half_edges[half_edges[tw].prev].origin;
+
+  update_dcel(hei, tw, u, v, w, x);   
+  invalidate_cache();                  
+}
+
+void Graph::update_sign(int vector_index) {
+  // Why this exists: Boundary vertices can share the same global index across quadrants
+  std::set<int> flipped;
+  for (int q = 0; q < 4; ++q) {
+    int qv = quad_idxs[vector_index][q];
+    if (flipped.insert(qv).second)
+      polarisation[qv] = !polarisation[qv];
+  }
+  invalidate_cache();
+}
+
 }  // namespace Isotopy
 
 namespace Utils {

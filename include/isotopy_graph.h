@@ -6,6 +6,7 @@
 #include <set>
 #include <string>
 #include <vector>
+#include <utility>
 
 namespace Isotopy {
 
@@ -68,6 +69,22 @@ struct Graph {
   // Legacy members (may be deprecated)
   vector<Edge> antipodal_partner;
   vector<Edge> edges_complete;
+
+  // DCEL
+  struct HalfEdge {
+    int origin;  ///< vertex index
+    int twin;    ///< Index of opposite half-edge; -1 = boundary
+    int next;    ///< CCW next half-edge within same face
+    int prev;    ///< CCW prev half-edge within same face
+    int face;    ///< Triangle index into tri_list; -1 = outer face
+  };
+  vector<HalfEdge> half_edges; ///< 3 * ntriangles entries; triangle i → he[3i..3i+2]
+  vector<int>      vertex_he;  ///< vertex_he[v] = one outgoing half-edge index from v
+  vector<Triangle> tri_list;   ///< Q1 triangulation passed to prepare()
+
+  // Fast edge lookup
+  std::set<Edge>      edge_set;  ///< Normalized edges (first < second) for membership test
+  std::map<Edge, int> he_map;    ///< (u,v) → half-edge index; both directions stored
 
 
   /**
@@ -242,7 +259,45 @@ struct Graph {
     return (p_regions + n_regions) == expected_regions;
   };
 
+  /**
+   * @brief Sets up the DCEL and edge lookup structures.
+   *
+   * Must be called before update_edge(edge) or is_flippable().
+   *
+   * @param triangles The Q1 triangulation (same list used to construct the graph).
+   */
+  void prepare(const vector<Triangle>& triangles);
+
+  /**
+   * @brief Returns true if the given Q1 edge can be flipped.
+   *
+   * An edge is flippable if it is interior (has a twin) and the resulting quadrilateral is strictly convex.
+   *
+   * @param edge The Q1 edge to test.
+   */
+  bool is_flippable(const Edge& edge);
+
+  /**
+   * @brief Returns all Q1 edges in the current triangulation that can be flipped.
+   *
+   * Requires prepare() to have been called.
+   */
+  vector<Edge> flippable_edges();
+
+  /**
+   * @brief Flips the given Q1 edge if it is flippable.
+   *
+   * Does nothing if the edge is not flippable.
+   *
+   * @param edge The Q1 edge to flip.
+   */
+  void update_edge(const Edge& edge);
+  void update_sign(int vector_index);
+
 private:
+  void invalidate_cache();
+  void apply_flip(const Edge& old_edge, const Edge& new_edge);
+  void update_dcel(int hei, int tw, int u, int v, int w, int x);
   // Union-find helpers templated to work with both array and vector
   template<typename T>
   static int find(T& parent_array, int x) {
@@ -379,6 +434,8 @@ inline vector<Edge> triangles_to_edges(int /*delta*/, const vector<Triangle>& tr
 inline vector<Edge> triangles_to_edges(int /*delta*/, const std::set<std::set<int>>& triangles) {
   return triangles_to_edges(triangles);
 }
+
+int original_idx(int delta, int idx);
 
 }
 

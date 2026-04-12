@@ -6,6 +6,7 @@
 #include <array>
 
 #include <fstream>
+#include <random>
 #include <sstream>
 
 #include <regex>
@@ -24,9 +25,168 @@ TEST_CASE("Constructor: Graph from set<set<int>> (triangulation)", "[isotopy_gra
   REQUIRE(graph.component[pt_map.at(std::make_pair(0,0))] == graph.component[pt_map.at(std::make_pair(0,1))]);
   REQUIRE(graph.component[pt_map.at(std::make_pair(0,0))] == graph.component[pt_map.at(std::make_pair(1,0))]);
   REQUIRE(graph.component[pt_map.at(std::make_pair(0,-1))] == graph.component[pt_map.at(std::make_pair(1,-1))]);
-  //std::string pcom = Utils::signs_and_triangles_to_pcom(sign,triangles);
-  //REQUIRE(Utils::pcom_to_signs_and_triangles(pcom) == std::make_pair(sign,triangles)); //Maybe sort triangles
 
+  // Convert triangles to vector<Triangle> for prepare()
+  std::vector<Isotopy::Triangle> triangles_vec;
+  for (const auto& t : triangles) {
+    auto it2 = t.begin();
+    int a = *it2++, b = *it2++, c = *it2;
+    triangles_vec.push_back({a, b, c});
+  }
+  graph.prepare(triangles_vec);
+
+  graph.update_edge({1,9});
+  //Check that components where cleared
+  //Check if 45 81 is an edge
+  bool has_edge_45_81 = false;
+  for (auto & edge : graph.component_edges) {
+    if ((edge.first == 45 && edge.second == 81) ||
+        (edge.first == 81 && edge.second == 45)) {
+      has_edge_45_81 = true;
+      break;
+    }
+  }
+  REQUIRE(!has_edge_45_81);
+  REQUIRE(!graph.components_computed);
+  REQUIRE(!graph.is_flippable({9,10}));
+  REQUIRE(!graph.is_flippable({10,9}));
+  graph.isotopy_type();
+  REQUIRE(graph.viro_notation() == "<1<1<1>>>");
+  graph.update_edge({25,30});
+  graph.isotopy_type();
+  REQUIRE(graph.viro_notation() == "<1v1<1>>");
+  graph.update_edge({18,24});
+  graph.isotopy_type();
+  REQUIRE(graph.viro_notation() == "<1<1>>");
+  graph.update_edge({5,13});
+  graph.isotopy_type();
+
+  REQUIRE(graph.viro_notation() == "<2>");
+  graph.update_sign(12);
+  graph.isotopy_type();
+  REQUIRE(graph.viro_notation() == "<4>");
+
+
+}
+
+TEST_CASE("is_flippable: boundary and interior edges", "[isotopy_graph][dcel]") {
+  int delta = 8;
+  std::vector<bool> sign(45, true);
+  std::set<std::set<int>> triangles_set = {{1,0,9},{1,9,10},{2,1,10},{2,10,11},{3,2,11},{3,11,12},{4,3,12},{4,12,13},{5,4,13},{5,13,14},{6,5,14},{6,14,15},{7,6,15},{7,15,16},{8,7,16},{10,9,17},{10,17,18},{11,10,18},{11,18,19},{12,11,19},{12,19,20},{13,12,20},{13,20,21},{14,13,21},{14,21,22},{15,14,22},{15,22,23},{16,15,23},{18,17,24},{18,24,25},{19,18,25},{19,25,26},{20,19,26},{20,26,27},{21,20,27},{21,27,28},{22,21,28},{22,28,29},{23,22,29},{25,24,30},{25,30,31},{26,25,31},{26,31,32},{27,26,32},{27,32,33},{28,27,33},{28,33,34},{29,28,34},{31,30,35},{31,35,36},{32,31,36},{32,36,37},{33,32,37},{33,37,38},{34,33,38},{36,35,39},{36,39,40},{37,36,40},{37,40,41},{38,37,41},{40,39,42},{40,42,43},{41,40,43},{43,42,44}};
+
+  std::vector<Isotopy::Triangle> triangles_vec;
+  for (const auto& t : triangles_set) {
+    auto it2 = t.begin(); int a=*it2++,b=*it2++,c=*it2;
+    triangles_vec.push_back({a,b,c});
+  }
+
+  Isotopy::Graph graph(delta, sign, triangles_set);
+  graph.prepare(triangles_vec);
+
+  REQUIRE(!graph.is_flippable({0,9}));
+  REQUIRE(!graph.is_flippable({9,0}));
+  REQUIRE(!graph.is_flippable({8,16}));
+  REQUIRE(graph.is_flippable({1,9}));
+  REQUIRE(graph.is_flippable({9,1}));
+}
+
+TEST_CASE("prepare: rejects triangulation inconsistent with graph edges", "[isotopy_graph][dcel]") {
+  int delta = 8;
+  std::vector<bool> sign(45, true);
+  std::set<std::set<int>> triangles_set = {{1,0,9},{1,9,10},{2,1,10},{2,10,11},{3,2,11},{3,11,12},{4,3,12},{4,12,13},{5,4,13},{5,13,14},{6,5,14},{6,14,15},{7,6,15},{7,15,16},{8,7,16},{10,9,17},{10,17,18},{11,10,18},{11,18,19},{12,11,19},{12,19,20},{13,12,20},{13,20,21},{14,13,21},{14,21,22},{15,14,22},{15,22,23},{16,15,23},{18,17,24},{18,24,25},{19,18,25},{19,25,26},{20,19,26},{20,26,27},{21,20,27},{21,27,28},{22,21,28},{22,28,29},{23,22,29},{25,24,30},{25,30,31},{26,25,31},{26,31,32},{27,26,32},{27,32,33},{28,27,33},{28,33,34},{29,28,34},{31,30,35},{31,35,36},{32,31,36},{32,36,37},{33,32,37},{33,37,38},{34,33,38},{36,35,39},{36,39,40},{37,36,40},{37,40,41},{38,37,41},{40,39,42},{40,42,43},{41,40,43},{43,42,44}};
+
+  Isotopy::Graph graph(delta, sign, triangles_set);
+
+  // Build a wrong triangulation: replace edge (1,9) with (0,2) in one triangle
+  std::vector<Isotopy::Triangle> wrong_triangles;
+  for (const auto& t : triangles_set) {
+    auto it2 = t.begin(); int a=*it2++,b=*it2++,c=*it2;
+    wrong_triangles.push_back({a,b,c});
+  }
+  // Corrupt one triangle: replace {0,1,9} → {0,2,9} (edge (1,9) → (2,9), edge (0,1) → (0,2))
+  for (auto& tri : wrong_triangles) {
+    if ((tri[0]==0||tri[1]==0||tri[2]==0) && (tri[0]==1||tri[1]==1||tri[2]==1) && (tri[0]==9||tri[1]==9||tri[2]==9)) {
+      tri = {0, 2, 9};
+      break;
+    }
+  }
+  REQUIRE_THROWS_AS(graph.prepare(wrong_triangles), std::invalid_argument);
+
+  // Correct triangulation should not throw
+  std::vector<Isotopy::Triangle> correct_triangles;
+  for (const auto& t : triangles_set) {
+    auto it2 = t.begin(); int a=*it2++,b=*it2++,c=*it2;
+    correct_triangles.push_back({a,b,c});
+  }
+  REQUIRE_NOTHROW(graph.prepare(correct_triangles));
+}
+
+TEST_CASE("Online update custom test: flip edge and vertex sign", "[isotopy_graph][dcel]") {
+  int delta = 8;
+  std::vector<bool> sign(45, true);
+  std::set<std::set<int>> triangles_set = {{1,0,9},{1,9,10},{2,1,10},{2,10,11},{3,2,11},{3,11,12},{4,3,12},{4,12,13},{5,4,13},{5,13,14},{6,5,14},{6,14,15},{7,6,15},{7,15,16},{8,7,16},{10,9,17},{10,17,18},{11,10,18},{11,18,19},{12,11,19},{12,19,20},{13,12,20},{13,20,21},{14,13,21},{14,21,22},{15,14,22},{15,22,23},{16,15,23},{18,17,24},{18,24,25},{19,18,25},{19,25,26},{20,19,26},{20,26,27},{21,20,27},{21,27,28},{22,21,28},{22,28,29},{23,22,29},{25,24,30},{25,30,31},{26,25,31},{26,31,32},{27,26,32},{27,32,33},{28,27,33},{28,33,34},{29,28,34},{31,30,35},{31,35,36},{32,31,36},{32,36,37},{33,32,37},{33,37,38},{34,33,38},{36,35,39},{36,39,40},{37,36,40},{37,40,41},{38,37,41},{40,39,42},{40,42,43},{41,40,43},{43,42,44}};
+
+  Isotopy::Graph online(delta,sign, triangles_set);
+
+  std::vector<Isotopy::Triangle> triangles_vec;
+  for (const auto& t : triangles_set) {
+    auto it2 = t.begin(); int a=*it2++,b=*it2++,c=*it2;
+    triangles_vec.push_back({a,b,c});
+  }
+
+  online.isotopy_type();
+  REQUIRE(online.viro_notation() == "<1<1<1<1>>>>");
+  online.prepare(triangles_vec);
+
+  online.update_edge({27,32});
+  online.isotopy_type();
+  REQUIRE(online.viro_notation() == "<1<2>>");
+
+  online.update_sign(3);
+  online.isotopy_type();
+
+  REQUIRE(online.viro_notation() == "<1<1>>");
+
+}
+
+TEST_CASE("Online updates match classical recomputation", "[isotopy_graph][dcel][stress]") {
+  int delta = 8;
+  std::vector<bool> sign(45, true);
+  std::set<std::set<int>> triangles_set = {{1,0,9},{1,9,10},{2,1,10},{2,10,11},{3,2,11},{3,11,12},{4,3,12},{4,12,13},{5,4,13},{5,13,14},{6,5,14},{6,14,15},{7,6,15},{7,15,16},{8,7,16},{10,9,17},{10,17,18},{11,10,18},{11,18,19},{12,11,19},{12,19,20},{13,12,20},{13,20,21},{14,13,21},{14,21,22},{15,14,22},{15,22,23},{16,15,23},{18,17,24},{18,24,25},{19,18,25},{19,25,26},{20,19,26},{20,26,27},{21,20,27},{21,27,28},{22,21,28},{22,28,29},{23,22,29},{25,24,30},{25,30,31},{26,25,31},{26,31,32},{27,26,32},{27,32,33},{28,27,33},{28,33,34},{29,28,34},{31,30,35},{31,35,36},{32,31,36},{32,36,37},{33,32,37},{33,37,38},{34,33,38},{36,35,39},{36,39,40},{37,36,40},{37,40,41},{38,37,41},{40,39,42},{40,42,43},{41,40,43},{43,42,44}};
+
+  std::vector<Isotopy::Triangle> triangles_vec;
+  for (const auto& t : triangles_set) {
+    auto it2 = t.begin(); int a=*it2++,b=*it2++,c=*it2;
+    triangles_vec.push_back({a,b,c});
+  }
+
+  Isotopy::Graph online(delta, sign, triangles_set);
+  online.isotopy_type();
+  online.prepare(triangles_vec);
+
+  std::mt19937 rng(12345);
+
+  for (int iter = 0; iter < 100; ++iter) {
+    auto flippable = online.flippable_edges();
+    bool do_flip = !flippable.empty() && (rng() % 2 == 0);
+
+    if (do_flip) {
+      Isotopy::Edge e = flippable[rng() % flippable.size()];
+      online.update_edge(e);
+    } else {
+      int v = static_cast<int>(rng() % static_cast<unsigned>(online.nverts));
+      online.update_sign(v);
+    }
+
+    online.isotopy_type();
+
+    std::vector<bool> cur_sign(online.polarisation.begin(), online.polarisation.begin() + online.nverts);
+    Isotopy::Graph classical(delta, cur_sign, Isotopy::triangles_to_edges(online.tri_list));
+    classical.isotopy_type();
+
+    REQUIRE(online.p_regions == classical.p_regions);
+    REQUIRE(online.n_regions == classical.n_regions);
+  }
 }
 
 TEST_CASE("Isotopy::Graph from triangulation  (Loading from pcom Test)", "[isotopy_graph]") {
