@@ -951,7 +951,19 @@ void remove_intersecting_edges(vector<pair<int, int>>& edges, const pair<int, in
 );
 }
 
-vector<pair<int, int>> get_random_triangulation(int delta) {
+pair<int, int> get_and_remove_random_edge(vector<pair<int, int>>& edges){
+  pair<int, int> result;
+  int pos = std::rand() % edges.size();
+  auto iter = edges.begin();
+  for(int i=0; i<pos; i++){
+    iter++;
+  }
+  result = *iter;
+  edges.erase(iter);
+  return result;
+}
+
+vector<pair<int, int>> get_random_triangulation(int delta, const vector<pair<int, int>>& existing_edges) {
 // void get_random_triangulation(int delta) {
   map<vector<int>, int> pt2int;
   map<int, vector<int>> int2pt;
@@ -964,29 +976,36 @@ vector<pair<int, int>> get_random_triangulation(int delta) {
       ptct++;
     }
   }
-  vector<pair<int, int>> initial_edges;
+  vector<pair<int, int>> primitive_edges;
   for(int i=0; i<ptct; i++){
     for(int j=i+1; j<ptct; j++){
       vector<int> p0(int2pt[i]), p1(int2pt[j]);
       int check = std::gcd(p0[0]-p1[0], p0[1]-p1[1]);
       if(check == 1){
-        initial_edges.push_back(pair<int, int>{i, j});
+        primitive_edges.push_back(pair<int, int>{i, j});
       }
     }
   }
-  // std::cout << "Length after init: " << initial_edges.size() << std::endl;
+  for(const auto& e: existing_edges){
+    remove_intersecting_edges(primitive_edges, e, int2pt);
+  }
+  // std::cout << "Length after init: " << primitive_edges.size() << std::endl;
   vector<pair<int, int>> result;
-  while(!initial_edges.empty()){
-    auto ne = initial_edges.back();
-    initial_edges.pop_back();
+  while(!primitive_edges.empty()){
+    pair<int, int> ne(get_and_remove_random_edge(primitive_edges));
     result.push_back(ne);
     // std::cout << "Adding edge: " << ne.first << " " << ne.second << std::endl;
     // std::cout << "Result length: " << result.size() << std::endl;
-    remove_intersecting_edges(initial_edges, ne, int2pt);
+    remove_intersecting_edges(primitive_edges, ne, int2pt);
   }
   // int target = 3 * delta + (3 * (delta * delta - delta)) / 2;
   // std::cout << "Target is " << target << std::endl;
   return result;
+}
+
+vector<pair<int, int>> get_random_triangulation(int delta) {
+  vector<pair<int, int>> ee;
+  return get_random_triangulation(delta, ee);
 }
 
 // map<pair<int,int>, int> get_pt2int(int delta) {
