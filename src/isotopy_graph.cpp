@@ -479,6 +479,34 @@ string viro_notation(int root_region, const Adjacency& region_adjacency, bool un
   return dfs(root_region);
 }
 
+vector<pair<int,int>> get_region_tree(int root_region, const Adjacency& region_adjacency) {
+  vector<pair<int,int>> result;
+  vector<bool> visited(region_adjacency.size(), false);
+
+  function<void(int, int)> dfs = [&](int curr, int parent_idx) {
+    int my_idx = (int)result.size();
+    result.push_back({parent_idx, 0});
+    visited[curr] = true;
+
+    int leaf_count = 0;
+    vector<int> non_leaf_children;
+    for (int nb : region_adjacency[curr]) {
+      if (!visited[nb]) {
+        bool is_leaf = true;
+        for (int nn : region_adjacency[nb])
+          if (!visited[nn] && nn != curr) { is_leaf = false; break; }
+        if (is_leaf) { leaf_count++; visited[nb] = true; }
+        else           non_leaf_children.push_back(nb);
+      }
+    }
+    result[my_idx].second = leaf_count;
+    for (int child : non_leaf_children) dfs(child, my_idx);
+  };
+
+  dfs(root_region, -1);
+  return result;
+}
+
 int num_vertices(int delta) {
   return (delta + 1) * (delta + 2) / 2;
 }

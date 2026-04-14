@@ -344,6 +344,10 @@ private:
    */
 string viro_notation(int root_region, const Adjacency& region_adjacency, bool unicode = false);
 
+// Returns the region tree in DFS order as (parent_index, leaf_count) pairs.
+// Index 0 = root (parent = -1). Mirrors the DFS used in viro_notation().
+vector<pair<int,int>> get_region_tree(int root_region, const Adjacency& region_adjacency);
+
 /**
  * @brief Computes the number of vertices in a triangular grid of degree delta.
  *
