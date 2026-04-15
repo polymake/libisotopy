@@ -23,7 +23,15 @@ TEST_CASE("Constructor: Graph from set<set<int>> (triangulation)", "[isotopy_gra
   REQUIRE(graph.viro_notation() == expected_viro);
   std::map<std::pair<int,int>, int> pt_map = Utils::get_pt2int(delta);
   auto rt = Utils::get_random_triangulation(8);
+  auto phk = Utils::partitions_of_max_length_k(10,10);
+  auto tn = Utils::trees_of_size(6);
+  int i = 0;
+  for(const auto& t:tn){
+      std::cout << i << ": " << t << std::endl;
+      i++;
+  }
   REQUIRE(rt.size() == 108);
+  REQUIRE(phk.size() == 42);
   REQUIRE(graph.component[pt_map.at(std::make_pair(0,0))] == graph.component[pt_map.at(std::make_pair(0,1))]);
   REQUIRE(graph.component[pt_map.at(std::make_pair(0,0))] == graph.component[pt_map.at(std::make_pair(1,0))]);
   REQUIRE(graph.component[pt_map.at(std::make_pair(0,-1))] == graph.component[pt_map.at(std::make_pair(1,-1))]);

@@ -942,6 +942,113 @@ void Graph::update_sign(int vector_index) {
 
 namespace Utils {
 
+vector<int> transpose_partition(const vector<int>& input){
+   int size= input.back();
+   vector<int> result(size);
+   for(const auto& i: input){
+      for(int j=0; j<i; j++){
+         result[size-1-j]++;
+      }
+   }
+   return result;
+}
+
+vector<vector<int>> partitions_of_height_k(int n, int k){
+   vector<vector<int>> result;
+   if(n<k){ return result; }
+   if(k==1){
+      vector<int> tmp(n);
+      for(unsigned int i=0; i<tmp.size(); i++){
+         tmp[i]=1;
+      }
+      result.push_back(tmp);
+      return result;
+   }
+   if(k == n){
+      vector<int> tmp{n};
+      result.push_back(tmp);
+      return result;
+   }
+   for(int i=1; i<=k; i++){
+      auto tail = partitions_of_height_k(n-k, i);
+      for(const auto& p: tail){
+         vector<int> tmp(p);
+         tmp.push_back(k);
+         result.push_back(tmp);
+      }
+   }
+   return result;
+}
+
+vector<vector<int>> partitions_of_length_k(int n, int k){
+   vector<vector<int>> result;
+   for(const auto& p : partitions_of_height_k(n, k)){
+      result.push_back(transpose_partition(p));
+   }
+   return result;
+}
+
+vector<vector<int>> partitions_of_max_length_k(int n, int k){
+   vector<vector<int>> result;
+   for(int i=1; i<=k; i++){
+      auto next = partitions_of_length_k(n, i);
+      result.insert(result.end(),
+            std::make_move_iterator(next.begin()),
+            std::make_move_iterator(next.end()));
+   }
+   return result;
+}
+
+vector<std::string> trees_of_size(int n){
+   std::string root("o");
+   if(n == 1){ return vector<std::string>{root}; }
+   vector<std::string> result;
+   std::string trivial = "o[";
+   bool first = true;
+   for(int i=1; i<=n-1; i++){
+      trivial += (first ? "o" : ",o");
+      first = false;
+   }
+   trivial += "]";
+   result.push_back(trivial);
+   for(int i=1; i<=n-1; i++){
+      for(const auto& p: partitions_of_max_length_k(n-i-1, i)){
+         auto it = p.rbegin();
+         vector<std::string> inner_res{"o["};
+         bool first = true;
+         while(it != p.rend()){
+            auto sts = trees_of_size(*it+1);
+            vector<std::string> newres{};
+            for(const auto& t : sts){
+               for(const auto& r : inner_res){
+                  std::string concat = r + (first ? "" : ",") + t;
+                  newres.push_back(concat);
+               }
+            }
+            std::swap(newres, inner_res);
+            ++it;
+            first = false;
+         }
+         std::string tail = "";
+         vector<std::string> newres;
+         first = true;
+         for(int j=0; j<i-p.size(); j++){
+            tail += (first ? "o" : ",o");
+            first = false;
+         }
+         tail = tail + "]";
+         for(const auto& r : inner_res){
+            std::string concat = r + (i>p.size() ? "," : "")+ tail;
+            newres.push_back(concat);
+         }
+         std::swap(newres, inner_res);
+         result.insert(result.end(),
+               std::make_move_iterator(inner_res.begin()),
+               std::make_move_iterator(inner_res.end()));
+      }
+   }
+   return result;
+}
 
 // Copied from hilbert_encoding.pl
 int orientation(int i, int j, int k, const map<int, vector<int>>& int2pt){

@@ -450,7 +450,10 @@ using Isotopy::vector;
 using Isotopy::string;
 using Isotopy::pair;
 
+vector<vector<int>> partitions_of_length_k(int n, int k);
+vector<vector<int>> partitions_of_max_length_k(int n, int k);
 vector<pair<int, int>> get_random_triangulation(int delta);
+vector<std::string> trees_of_size(int n);
 
 // Backwards-compatible helper (master API)
 std::map<std::pair<int,int>, int> get_pt2int(int delta);
