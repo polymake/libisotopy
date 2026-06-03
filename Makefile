@@ -80,6 +80,9 @@ profiling: $(PROFILING_BIN) $(TEST_YAML)
 $(PROFILING_BIN): $(TARGET) $(PROFILING_OBJ) | $(BIN_DIR)
 	$(CXX) -o $@ $(PROFILING_OBJ) -L. -Wl,-rpath,\$$ORIGIN/.. -lisotopy
 
+docs:
+	doxygen Doxyfile
+
 clean:
 	rm -f $(OBJ) $(TARGET) $(TEST_OBJ) $(TEST_BIN) $(TEST_BATCH_OBJ) \
 	$(TEST_FULL_BIN) $(BENCHMARK_OBJ) $(BENCHMARK_BIN) $(PROFILING_OBJ) \
@@ -93,7 +96,7 @@ debug_test: $(TEST_BIN)
 	./$(TEST_BIN)
 
 # Emscripten build
-.PHONY: emscripten
+.PHONY: emscripten docs
 
 emscripten: clean emscripten_build
 

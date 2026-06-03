@@ -274,6 +274,7 @@ struct Graph {
    * An edge is flippable if it is interior (has a twin) and the resulting quadrilateral is strictly convex.
    *
    * @param edge The Q1 edge to test.
+   * @return True if the edge can be flipped, false otherwise.
    */
   bool is_flippable(const Edge& edge);
 
@@ -281,6 +282,8 @@ struct Graph {
    * @brief Returns all Q1 edges in the current triangulation that can be flipped.
    *
    * Requires prepare() to have been called.
+   *
+   * @return Vector of all flippable Q1 edges.
    */
   vector<Edge> flippable_edges();
 
@@ -292,6 +295,11 @@ struct Graph {
    * @param edge The Q1 edge to flip.
    */
   void update_edge(const Edge& edge);
+  /**
+   * @brief Updates the sign of a vertex and invalidates cached computation results.
+   *
+   * @param vector_index The index of the vertex in the polarisation array whose sign is toggled.
+   */
   void update_sign(int vector_index);
 
 private:
@@ -427,14 +435,36 @@ vector<Edge> triangles_to_edges(const vector<Triangle>& triangles);
  */
 vector<Edge> triangles_to_edges(const std::set<std::set<int>>& triangles);
 
+/**
+ * @brief Convenience overload; delta is unused. Delegates to triangles_to_edges(const vector<Triangle>&).
+ *
+ * @param triangles Triangles as Isotopy::Triangle entries.
+ * @return A deduplicated vector of edges.
+ */
 inline vector<Edge> triangles_to_edges(int /*delta*/, const vector<Triangle>& triangles) {
   return triangles_to_edges(triangles);
 }
 
+/**
+ * @brief Convenience overload; delta is unused. Delegates to triangles_to_edges(const set<set<int>>&).
+ *
+ * @param triangles Triangles as sets of vertex indices.
+ * @return A deduplicated vector of edges.
+ */
 inline vector<Edge> triangles_to_edges(int /*delta*/, const std::set<std::set<int>>& triangles) {
   return triangles_to_edges(triangles);
 }
 
+/**
+ * @brief Maps a total-quadrant vertex index back to its first-quadrant (Q1) index.
+ *
+ * Useful when working with raw indices from component[], region[], or quad_idxs[]
+ * that may refer to reflected copies of a Q1 vertex.
+ *
+ * @param delta The degree of the patchwork.
+ * @param idx A vertex index in the total (all-quadrant) indexing.
+ * @return The corresponding Q1 vertex index.
+ */
 int original_idx(int delta, int idx);
 
 }
@@ -446,24 +476,74 @@ using Isotopy::vector;
 using Isotopy::string;
 using Isotopy::pair;
 
-// Backwards-compatible helper (master API)
+/**
+ * @brief Returns a map from lattice point coordinates to vertex indices for degree delta.
+ *
+ * @param delta The degree of the patchwork.
+ * @return Map from (x, y) lattice point to first-quadrant vertex index.
+ */
 std::map<std::pair<int,int>, int> get_pt2int(int delta);
 
-// Legacy API: returns set<set<int>>
+/**
+ * @brief Parses a pcom string into a sign vector and triangle set (legacy API).
+ *
+ * @param pcom_string The pcom-format string encoding a patchwork.
+ * @return Pair of sign vector and triangulation as a set of sets of vertex indices.
+ */
 std::pair<vector<bool>, std::set<std::set<int>>> pcom_to_signs_and_triangles(const string& pcom_string);
 
-// New API: returns vector<Triangle>
+/**
+ * @brief Parses a pcom string into a sign vector and triangle list.
+ *
+ * @param pcom_string The pcom-format string encoding a patchwork.
+ * @return Pair of sign vector and triangulation as a vector of Isotopy::Triangle.
+ */
 pair<vector<bool>, vector<Isotopy::Triangle>> pcom_to_signs_and_triangles_vec(const string& pcom_string);
 
-// Backwards-compatible overload: returns set<set<int>>
+/**
+ * @brief Parses a pcom string into a sign vector and triangle set (backwards-compatible overload).
+ *
+ * @param pcom_string The pcom-format string encoding a patchwork.
+ * @return Pair of sign vector and triangulation as a set of sets of vertex indices.
+ */
 std::pair<vector<bool>, std::set<std::set<int>>> pcom_to_signs_and_triangles_set(const string& pcom_string);
 
-// New API: takes vector<Triangle>
+/**
+ * @brief Serializes a sign vector and triangle list to a pcom string.
+ *
+ * @param sign_vector The sign distribution on lattice points.
+ * @param triangles The triangulation as a vector of Isotopy::Triangle.
+ * @return The pcom-format string.
+ */
 string signs_and_triangles_to_pcom(const vector<bool>& sign_vector, const vector<Isotopy::Triangle>& triangles);
+
+/**
+ * @brief Serializes a sign vector and triangle list to a pcom string with an origin tag.
+ *
+ * @param sign_vector The sign distribution on lattice points.
+ * @param triangles The triangulation as a vector of Isotopy::Triangle.
+ * @param origin_tag A string tag identifying the source, embedded in the output.
+ * @return The pcom-format string.
+ */
 string signs_and_triangles_to_pcom(const vector<bool>& sign_vector, const vector<Isotopy::Triangle>& triangles, string origin_tag);
 
-// Backwards-compatible overloads: take set<set<int>>
+/**
+ * @brief Serializes a sign vector and triangle set to a pcom string (backwards-compatible overload).
+ *
+ * @param sign_vector The sign distribution on lattice points.
+ * @param triangles The triangulation as a set of sets of vertex indices.
+ * @return The pcom-format string.
+ */
 string signs_and_triangles_to_pcom(const vector<bool>& sign_vector, const std::set<std::set<int>>& triangles);
+
+/**
+ * @brief Serializes a sign vector and triangle set to a pcom string with an origin tag (backwards-compatible overload).
+ *
+ * @param sign_vector The sign distribution on lattice points.
+ * @param triangles The triangulation as a set of sets of vertex indices.
+ * @param origin_tag A string tag identifying the source, embedded in the output.
+ * @return The pcom-format string.
+ */
 string signs_and_triangles_to_pcom(const vector<bool>& sign_vector, const std::set<std::set<int>>& triangles, string origin_tag);
 
 }
