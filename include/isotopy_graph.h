@@ -441,6 +441,14 @@ inline vector<Edge> triangles_to_edges(int /*delta*/, const std::set<std::set<in
 
 int original_idx(int delta, int idx);
 
+/**
+ * @brief Reconstruct triangulation faces from a flat edge list.
+ *
+ * Finds 3-cliques in the adjacency graph and keeps only unit-area triangles
+ * (|area2|==1), filtering false positives from non-minimal 3-cliques.
+ */
+vector<Triangle> edges_to_triangles(const vector<Edge>& edges, int delta);
+
 }
 
 namespace Utils {

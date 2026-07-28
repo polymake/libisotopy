@@ -4,7 +4,7 @@ MAX_DELTA ?= 20
 # 2080Ti nodes, where we build on the run host) can be dropped for cross-host
 # builds that would otherwise SIGILL.  Build with `make ARCH=` to disable.
 ARCH ?= -march=native
-CXXFLAGS = -std=c++20 -Wall -Wextra -O3 -flto $(ARCH) -Iinclude -fPIC -DMAX_DELTA=$(MAX_DELTA)
+CXXFLAGS = -std=c++20 -Wall -Wextra -O3 -flto=auto $(ARCH) -Iinclude -fPIC -DMAX_DELTA=$(MAX_DELTA)
 BIN_DIR = bin
 TEST_DIR = $(BIN_DIR)/tests
 BENCHMARK_DIR = $(BIN_DIR)/benchmarks

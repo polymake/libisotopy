@@ -556,6 +556,35 @@ vector<Edge> triangles_to_edges(const std::set<std::set<int>>& triangles) {
   return triangles_to_edges(tri_vec);
 }
 
+// Reconstruct triangulation faces from an edge list.
+// Finds all 3-cliques in the adjacency graph, but only keeps unit-area triangles
+// (|area2|==1 by Pick's theorem) to avoid false positives where three vertices are
+// pairwise connected but a fourth vertex sits inside their convex hull.
+vector<Triangle> edges_to_triangles(const vector<Edge>& edges, int delta) {
+  map<int, set<int>> adj;
+  for (auto [u, v] : edges) { adj[u].insert(v); adj[v].insert(u); }
+
+  set<Triangle> seen;
+  vector<Triangle> tris;
+  for (auto [u, v] : edges) {
+    for (int w : adj[u]) {
+      if (adj[v].count(w)) {
+        Triangle t = {u, v, w};
+        sort(t.begin(), t.end());
+        if (seen.insert(t).second) {
+          auto [xa, ya] = idx_to_point(delta, t[0]);
+          auto [xb, yb] = idx_to_point(delta, t[1]);
+          auto [xc, yc] = idx_to_point(delta, t[2]);
+          int area2 = (xb-xa)*(yc-ya) - (yb-ya)*(xc-xa);
+          if (area2 == 1 || area2 == -1)
+            tris.push_back(t);
+        }
+      }
+    }
+  }
+  return tris;
+}
+
 // Helper to build coordinate mapping for a given delta (cached)
 // This duplicates the quadrant indexing logic from Graph::initialize
 // but provides a standalone version for point_to_idx/idx_to_point functions
