@@ -1,0 +1,36 @@
+.TH "Isotopy::Graph::HalfEdge" 3 "libisotopy" \" -*- nroff -*-
+.ad l
+.nh
+.SH NAME
+Isotopy::Graph::HalfEdge
+.SH SYNOPSIS
+.br
+.PP
+.SS "Public Attributes"
+
+.in +1c
+.ti -1c
+.RI "int \fBorigin\fP"
+.br
+.RI "vertex index "
+.ti -1c
+.RI "int \fBtwin\fP"
+.br
+.RI "Index of opposite half-edge; -1 = boundary\&. "
+.ti -1c
+.RI "int \fBnext\fP"
+.br
+.RI "CCW next half-edge within same face\&. "
+.ti -1c
+.RI "int \fBprev\fP"
+.br
+.RI "CCW prev half-edge within same face\&. "
+.ti -1c
+.RI "int \fBface\fP"
+.br
+.RI "Triangle index into tri_list; -1 = outer face\&. "
+.in -1c
+
+.SH "Author"
+.PP 
+Generated automatically by Doxygen for libisotopy from the source code\&.

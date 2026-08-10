@@ -9,6 +9,13 @@ Isotopy::Graph \- Represents an isotopy type as a graph and provides methods for
 .PP
 .PP
 \fR#include <isotopy_graph\&.h>\fP
+.SS "Classes"
+
+.in +1c
+.ti -1c
+.RI "struct \fBHalfEdge\fP"
+.br
+.in -1c
 .SS "Public Member Functions"
 
 .in +1c
@@ -17,21 +24,41 @@ Isotopy::Graph \- Represents an isotopy type as a graph and provides methods for
 .br
 .RI "Constructs an empty graph\&. "
 .ti -1c
-.RI "\fBGraph\fP (int \fBdelta\fP, const std::vector< bool > &sign_vector, const std::set< std::pair< int, int > > &\fBedges\fP)"
+.RI "\fBGraph\fP (int \fBdelta\fP)"
 .br
-.RI "Constructs a graph from a sign vector and a set of edges\&. "
+.RI "Constructs a graph with only delta set (for two-phase construction)\&. "
 .ti -1c
-.RI "\fBGraph\fP (int \fBdelta\fP, const std::vector< bool > &sign_vector, const std::set< std::set< int > > &triangles)"
+.RI "void \fBinitialize\fP (const vector< bool > &sign_vector)"
 .br
-.RI "Constructs a graph from a sign vector and a set of triangles\&. "
+.RI "Initializes the graph structure from a sign vector\&. "
+.ti -1c
+.RI "void \fBprocess_triangles\fP (const vector< Triangle > &triangles)"
+.br
+.RI "Processes triangles to populate component and adjacency edges\&. "
+.ti -1c
+.RI "void \fBprocess_edges\fP (const vector< Edge > &edges)"
+.br
+.RI "Processes edges to populate component and adjacency edges\&. "
+.ti -1c
+.RI "\fBGraph\fP (int \fBdelta\fP, const vector< bool > &sign_vector, const vector< Edge > &edges)"
+.br
+.RI "Constructs a graph from a sign vector and a list of edges\&. "
+.ti -1c
+.RI "\fBGraph\fP (int \fBdelta\fP, const vector< bool > &sign_vector, const std::set< std::pair< int, int > > &edges)"
+.br
+.RI "Constructs a graph from a sign vector and a set of edges (backwards compatibility)\&. "
+.ti -1c
+.RI "\fBGraph\fP (int \fBdelta\fP, const vector< bool > &sign_vector, const vector< Triangle > &triangles)"
+.br
+.RI "Constructs a graph from a sign vector and a list of triangles\&. "
+.ti -1c
+.RI "\fBGraph\fP (int \fBdelta\fP, const vector< bool > &sign_vector, const std::set< std::set< int > > &triangles)"
+.br
+.RI "Constructs a graph from a sign vector and a set of triangles (backwards compatibility)\&. "
 .ti -1c
 .RI "void \fBconnected_components\fP ()"
 .br
 .RI "Computes the connected components of the graph\&. "
-.ti -1c
-.RI "void \fBpre_isotopy_root\fP ()"
-.br
-.RI "Prepares neighbor sets for isotopy root computation\&. "
 .ti -1c
 .RI "int \fBisotopy_root\fP ()"
 .br
@@ -45,7 +72,7 @@ Isotopy::Graph \- Represents an isotopy type as a graph and provides methods for
 .br
 .RI "Computes the full isotopy type of the graph\&. "
 .ti -1c
-.RI "std::string \fBviro_notation\fP (bool unicode=false)"
+.RI "string \fBviro_notation\fP (bool unicode=false)"
 .br
 .RI "Returns the Viro notation for the isotopy type of the graph\&. "
 .ti -1c
@@ -61,46 +88,91 @@ Isotopy::Graph \- Represents an isotopy type as a graph and provides methods for
 .br
 .RI "Checks if the graph represents an M-curve\&. "
 .ti -1c
-.RI "void \fBlazy_compute\fP (bool need_components, bool need_root, bool need_regions, bool need_region_counts)"
+.RI "void \fBprepare\fP (const vector< Triangle > &triangles)"
 .br
+.RI "Sets up the DCEL and edge lookup structures\&. "
+.ti -1c
+.RI "bool \fBis_flippable\fP (const Edge &edge)"
+.br
+.RI "Returns true if the given Q1 edge can be flipped\&. "
+.ti -1c
+.RI "vector< Edge > \fBflippable_edges\fP ()"
+.br
+.RI "Returns all Q1 edges in the current triangulation that can be flipped\&. "
+.ti -1c
+.RI "void \fBupdate_edge\fP (const Edge &edge)"
+.br
+.RI "Flips the given Q1 edge if it is flippable\&. "
+.ti -1c
+.RI "void \fBupdate_sign\fP (int vector_index)"
+.br
+.RI "Updates the sign of a vertex and invalidates cached computation results\&. "
 .in -1c
 .SS "Public Attributes"
 
 .in +1c
 .ti -1c
-.RI "int \fBdelta\fP"
+.RI "int \fBdelta\fP = 0"
 .br
-.RI "Number of side points (vertices)\&. "
+.RI "The degree of the patchwork\&. "
 .ti -1c
-.RI "std::vector< bool > \fBsign\fP"
+.RI "bool \fBdelta_even\fP"
 .br
-.RI "Sign vector with a boolean value for each vertex\&. "
+.RI "True if delta is even, false if odd\&. "
 .ti -1c
-.RI "std::vector< std::set< int > > \fBadjacency\fP"
+.RI "int \fBnverts\fP = 0"
 .br
-.RI "Adjacency list for the graph\&. "
+.RI "Number of vertices in the first quadrant\&. "
 .ti -1c
-.RI "std::vector< int > \fBside_points\fP"
+.RI "int \fBntotalverts\fP = 0"
 .br
-.RI "Maps side point index to vertex index\&. "
+.RI "Total number of compressed vertices across quadrants\&. "
 .ti -1c
-.RI "std::vector< std::vector< bool > > \fBsides\fP"
+.RI "int \fBntriangles\fP = 0"
 .br
-.RI "sides[i][j] is true if sidepoint i is on side j (0: top-right, 1: bottom-right, 2: bottom-left, 3: top-left)\&. "
+.RI "Number of triangles in the input triangulation\&. "
 .ti -1c
-.RI "std::vector< std::set< int > > \fBnbs\fP"
+.RI "int \fBncomponents\fP = 0"
 .br
-.RI "nbs[i] gives the set of other sidepoints connected to sidepoint i via its component\&. "
+.RI "Number of connected components (after \fBconnected_components()\fP)\&. "
+.ti -1c
+.RI "array< uint8_t, MAX_TOTAL_VERTS > \fBpolarisation\fP"
+.br
+.RI "polarisation[vertex_idx] gives the sign of vertex vertex_idx (initialized in \fBinitialize()\fP) "
+.ti -1c
+.RI "array< QuadrantIndices, MAX_VERTS > \fBquad_idxs\fP"
+.br
+.RI "quad_idxs[i][q] gives the global index of vertex i reflected to quadrant q (initialized in \fBinitialize()\fP) "
+.ti -1c
+.RI "vector< Edge > \fBcomponent_edges\fP"
+.br
+.RI "Edges for connected component analysis (same-sign edges, no longer populated)\&. "
+.ti -1c
+.RI "vector< Edge > \fBadjacency_edges\fP"
+.br
+.RI "Edges for component adjacency (different-sign edges)\&. "
+.ti -1c
+.RI "array< int, MAX_TOTAL_VERTS > \fBparent\fP"
+.br
+.RI "Union-find parent array for component construction (initialized in \fBinitialize()\fP)\&. "
+.ti -1c
+.RI "array< int, MAX_TOTAL_VERTS > \fBrank\fP"
+.br
+.RI "Union-find rank array for union-by-rank optimization (initialized in \fBinitialize()\fP)\&. "
 .ti -1c
 .RI "int \fBroot\fP = \-1"
 .br
 .RI "Root component index\&. "
 .ti -1c
-.RI "std::vector< int > \fBcomponent\fP"
+.RI "array< int, MAX_TOTAL_VERTS > \fBcomponent\fP"
 .br
-.RI "component[i] gives the component index of vertex i\&. "
+.RI "component[i] gives the component index of vertex i\&. (initialized in \fBconnected_components()\fP) "
 .ti -1c
-.RI "std::vector< std::set< int > > \fBcomponent_adjacency\fP"
+.RI "bool \fBcomponents_computed\fP = false"
+.br
+.RI "Guard for \fBconnected_components()\fP idempotency (replaces component\&.empty() check)\&. "
+.ti -1c
+.RI "Adjacency \fBcomponent_adjacency\fP"
 .br
 .RI "component_adjacency[c] gives the set of components adjacent to component c\&. "
 .ti -1c
@@ -108,29 +180,55 @@ Isotopy::Graph \- Represents an isotopy type as a graph and provides methods for
 .br
 .RI "Region index of the root component\&. "
 .ti -1c
-.RI "std::vector< int > \fBregion\fP"
+.RI "int \fBregion_count\fP = 0"
 .br
-.RI "region[c] gives the region index of component c\&. "
+.RI "Total number of regions\&. "
 .ti -1c
-.RI "std::vector< std::set< int > > \fBregion_adjacency\fP"
+.RI "array< int, MAX_TOTAL_VERTS > \fBregion\fP"
+.br
+.RI "region[c] gives the region index of component c\&. (initialized in \fBisotopy_type()\fP) "
+.ti -1c
+.RI "Adjacency \fBregion_adjacency\fP"
 .br
 .RI "region_adjacency[r] gives the set of regions adjacent to region r\&. "
 .ti -1c
-.RI "std::vector< bool > \fBregion_sign\fP"
+.RI "array< uint8_t, MAX_TOTAL_VERTS > \fBregion_sign\fP"
 .br
-.RI "region_sign[r] gives the sign of region r (true for positive, false for negative)\&. "
-.ti -1c
-.RI "std::set< std::pair< int, int > > \fBedges\fP = std::set<std::pair<int, int>>()"
-.br
-.RI "Edges of the tree representing the isotopy graph\&. "
+.RI "region_sign[r] gives the sign of region r (initialized in \fBisotopy_type()\fP, 0=negative, 1=positive) "
 .ti -1c
 .RI "int \fBp_regions\fP = 0"
 .br
-.RI "Number of even regions\&. "
+.RI "Number of positive regions\&. "
 .ti -1c
 .RI "int \fBn_regions\fP = \-1"
 .br
-.RI "Number of odd regions\&. "
+.RI "Number of negative regions\&. "
+.ti -1c
+.RI "vector< Edge > \fBantipodal_partner\fP"
+.br
+.ti -1c
+.RI "vector< Edge > \fBedges_complete\fP"
+.br
+.ti -1c
+.RI "vector< \fBHalfEdge\fP > \fBhalf_edges\fP"
+.br
+.RI "3 * ntriangles entries; triangle i → he[3i\&.\&.3i+2] "
+.ti -1c
+.RI "vector< int > \fBvertex_he\fP"
+.br
+.RI "vertex_he[v] = one outgoing half-edge index from v "
+.ti -1c
+.RI "vector< Triangle > \fBtri_list\fP"
+.br
+.RI "Q1 triangulation passed to \fBprepare()\fP\&. "
+.ti -1c
+.RI "std::set< Edge > \fBedge_set\fP"
+.br
+.RI "Normalized edges (first < second) for membership test\&. "
+.ti -1c
+.RI "std::map< Edge, int > \fBhe_map\fP"
+.br
+.RI "(u,v) → half-edge index; both directions stored "
 .in -1c
 .SH "Detailed Description"
 .PP 
@@ -143,14 +241,41 @@ The \fBGraph\fP struct encapsulates the data and algorithms needed to construct 
 
 .PP
 Constructs an empty graph\&. Initializes an empty graph with no vertices, edges, or triangles\&. 
-.SS "Isotopy::Graph::Graph (int delta, const std::vector< bool > & sign_vector, const std::set< std::pair< int, int > > & edges)"
+.SS "Isotopy::Graph::Graph (int delta)\fR [inline]\fP, \fR [explicit]\fP"
 
 .PP
-Constructs a graph from a sign vector and a set of edges\&. 
+Constructs a graph with only delta set (for two-phase construction)\&. Use this followed by \fBinitialize()\fP and \fBprocess_triangles()\fP/process_edges() for fine-grained control or benchmarking individual phases\&.
+
 .PP
 \fBParameters\fP
 .RS 4
-\fIdelta\fP The number of vertices\&. 
+\fI\fBdelta\fP\fP The degree of the patchwork\&. 
+.RE
+.PP
+
+.SS "Isotopy::Graph::Graph (int delta, const vector< bool > & sign_vector, const vector< Edge > & edges)"
+
+.PP
+Constructs a graph from a sign vector and a list of edges\&. 
+.PP
+\fBParameters\fP
+.RS 4
+\fI\fBdelta\fP\fP The degree of the patchwork\&. 
+.br
+\fIsign_vector\fP The sign vector with a boolean value for each vertex\&. 
+.br
+\fIedges\fP The list of edges, each represented as a pair of vertex indices\&. 
+.RE
+.PP
+
+.SS "Isotopy::Graph::Graph (int delta, const vector< bool > & sign_vector, const std::set< std::pair< int, int > > & edges)"
+
+.PP
+Constructs a graph from a sign vector and a set of edges (backwards compatibility)\&. 
+.PP
+\fBParameters\fP
+.RS 4
+\fI\fBdelta\fP\fP The degree of the patchwork\&. 
 .br
 \fIsign_vector\fP The sign vector with a boolean value for each vertex\&. 
 .br
@@ -158,14 +283,29 @@ Constructs a graph from a sign vector and a set of edges\&.
 .RE
 .PP
 
-.SS "Isotopy::Graph::Graph (int delta, const std::vector< bool > & sign_vector, const std::set< std::set< int > > & triangles)"
+.SS "Isotopy::Graph::Graph (int delta, const vector< bool > & sign_vector, const vector< Triangle > & triangles)"
 
 .PP
-Constructs a graph from a sign vector and a set of triangles\&. 
+Constructs a graph from a sign vector and a list of triangles\&. 
 .PP
 \fBParameters\fP
 .RS 4
-\fIdelta\fP The number of vertices\&. 
+\fI\fBdelta\fP\fP defines the degree of the patchwork 
+.br
+\fIsign_vector\fP The sign vector with a boolean value for each vertex\&. 
+.br
+\fItriangles\fP The list of triangles, each represented as three vertex indices\&. 
+.RE
+.PP
+
+.SS "Isotopy::Graph::Graph (int delta, const vector< bool > & sign_vector, const std::set< std::set< int > > & triangles)"
+
+.PP
+Constructs a graph from a sign vector and a set of triangles (backwards compatibility)\&. 
+.PP
+\fBParameters\fP
+.RS 4
+\fI\fBdelta\fP\fP defines the degree of the patchwork 
 .br
 \fIsign_vector\fP The sign vector with a boolean value for each vertex\&. 
 .br
@@ -194,6 +334,47 @@ Returns the number of even regions in the isotopy decomposition\&.
 \fBReturns\fP
 .RS 4
 The count of even regions\&. 
+.RE
+.PP
+
+.SS "vector< Edge > Isotopy::Graph::flippable_edges ()"
+
+.PP
+Returns all Q1 edges in the current triangulation that can be flipped\&. Requires \fBprepare()\fP to have been called\&.
+
+.PP
+\fBReturns\fP
+.RS 4
+Vector of all flippable Q1 edges\&. 
+.RE
+.PP
+
+.SS "void Isotopy::Graph::initialize (const vector< bool > & sign_vector)"
+
+.PP
+Initializes the graph structure from a sign vector\&. Sets up quadrant indices, polarisation array, antipodal partners, and reserves space for edge vectors\&. Must be called before \fBprocess_triangles()\fP or \fBprocess_edges()\fP\&.
+
+.PP
+\fBParameters\fP
+.RS 4
+\fIsign_vector\fP The sign vector with a boolean value for each vertex\&. 
+.RE
+.PP
+
+.SS "bool Isotopy::Graph::is_flippable (const Edge & edge)"
+
+.PP
+Returns true if the given Q1 edge can be flipped\&. An edge is flippable if it is interior (has a twin) and the resulting quadrilateral is strictly convex\&.
+
+.PP
+\fBParameters\fP
+.RS 4
+\fIedge\fP The Q1 edge to test\&. 
+.RE
+.PP
+\fBReturns\fP
+.RS 4
+True if the edge can be flipped, false otherwise\&. 
 .RE
 .PP
 
@@ -247,11 +428,66 @@ The count of odd regions\&.
 .RE
 .PP
 
-.SS "void Isotopy::Graph::pre_isotopy_root ()"
+.SS "void Isotopy::Graph::prepare (const vector< Triangle > & triangles)"
 
 .PP
-Prepares neighbor sets for isotopy root computation\&. For each side point, computes the set of other side points it is connected to via its component\&. Populates the \fRnbs\fP member with this neighbor information\&. 
-.SS "std::string Isotopy::Graph::viro_notation (bool unicode = \fRfalse\fP)"
+Sets up the DCEL and edge lookup structures\&. Must be called before update_edge(edge) or \fBis_flippable()\fP\&.
+
+.PP
+\fBParameters\fP
+.RS 4
+\fItriangles\fP The Q1 triangulation (same list used to construct the graph)\&. 
+.RE
+.PP
+
+.SS "void Isotopy::Graph::process_edges (const vector< Edge > & edges)"
+
+.PP
+Processes edges to populate component and adjacency edges\&. Must be called after \fBinitialize()\fP\&. Classifies edges as same-sign (component edges) or different-sign (adjacency edges) across all quadrants\&.
+
+.PP
+\fBParameters\fP
+.RS 4
+\fIedges\fP The list of edges, each represented as a pair of vertex indices\&. 
+.RE
+.PP
+
+.SS "void Isotopy::Graph::process_triangles (const vector< Triangle > & triangles)"
+
+.PP
+Processes triangles to populate component and adjacency edges\&. Must be called after \fBinitialize()\fP\&. Classifies triangle edges as same-sign (component edges) or different-sign (adjacency edges) across all quadrants\&.
+
+.PP
+\fBParameters\fP
+.RS 4
+\fItriangles\fP The list of triangles, each represented as three vertex indices\&. 
+.RE
+.PP
+
+.SS "void Isotopy::Graph::update_edge (const Edge & edge)"
+
+.PP
+Flips the given Q1 edge if it is flippable\&. Does nothing if the edge is not flippable\&.
+
+.PP
+\fBParameters\fP
+.RS 4
+\fIedge\fP The Q1 edge to flip\&. 
+.RE
+.PP
+
+.SS "void Isotopy::Graph::update_sign (int vector_index)"
+
+.PP
+Updates the sign of a vertex and invalidates cached computation results\&. 
+.PP
+\fBParameters\fP
+.RS 4
+\fIvector_index\fP The index of the vertex in the polarisation array whose sign is toggled\&. 
+.RE
+.PP
+
+.SS "string Isotopy::Graph::viro_notation (bool unicode = \fRfalse\fP)"
 
 .PP
 Returns the Viro notation for the isotopy type of the graph\&. Generates a string representation (Viro notation) of the isotopy type, using the computed regions and their adjacencies\&. Optionally outputs Unicode symbols for delimiters and separators\&.
