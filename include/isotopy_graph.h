@@ -3,6 +3,7 @@
 #include <array>
 #include <cstdint>
 #include <map>
+#include <optional>
 #include <set>
 #include <string>
 #include <vector>
@@ -479,6 +480,19 @@ int original_idx(int delta, int idx);
  */
 vector<Triangle> edges_to_triangles(const vector<Edge>& edges, int delta);
 
+/**
+ * @brief Full unimodular triangulation of the simplex containing the given edges.
+ *
+ * Deterministic: completes the edge set greedily, shortest edges first.
+ *
+ * @param delta The degree of the patchwork.
+ * @param edges Edges (vertex index pairs) the triangulation must contain.
+ * @return The triangulation, or std::nullopt if the edges pairwise conflict.
+ * @throws std::invalid_argument on delta < 1, an out-of-range or degenerate
+ *         edge, or a non-primitive edge.
+ */
+std::optional<vector<Triangle>> refine(int delta, const vector<Edge>& edges);
+
 }
 
 namespace Utils {
@@ -491,6 +505,7 @@ using Isotopy::pair;
 vector<vector<int>> partitions_of_length_k(int n, int k);
 vector<vector<int>> partitions_of_max_length_k(int n, int k);
 vector<pair<int, int>> get_random_triangulation(int delta);
+vector<pair<int, int>> get_random_triangulation(int delta, const vector<pair<int, int>>& existing_edges);
 vector<std::string> trees_of_size(int n);
 
 /**

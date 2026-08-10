@@ -21,10 +21,10 @@ else
     RPATH_FLAG = -Wl,-rpath,\$$ORIGIN/../..
 endif
 
-SRC = src/isotopy_graph.cpp
-OBJ = obj/isotopy_graph.o
+SRC = src/isotopy_graph.cpp src/haas.cpp
+OBJ = obj/isotopy_graph.o obj/haas.o
 
-TEST_SRC = tests/isotopy_graph.cpp
+TEST_SRC = tests/isotopy_graph.cpp tests/haas.cpp
 TEST_OBJ = $(TEST_SRC:.cpp=.o)
 TEST_BIN = $(TEST_DIR)/isotopy_graph_test
 
@@ -105,7 +105,7 @@ debug_test: $(TEST_BIN)
 emscripten: clean emscripten_build
 
 emscripten_build: 
-	$(MAKE) OBJ="wasm_obj/isotopy_graph.o" TARGET=libisotopy_wasm.a CXX=em++ CXXFLAGS="$(CXXFLAGS)" libisotopy_wasm.a
+	$(MAKE) OBJ="wasm_obj/isotopy_graph.o wasm_obj/haas.o" TARGET=libisotopy_wasm.a CXX=em++ CXXFLAGS="$(CXXFLAGS)" libisotopy_wasm.a
 
 libisotopy_wasm.a: $(OBJ)
 	ar rcs $@ $(OBJ)

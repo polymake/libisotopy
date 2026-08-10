@@ -9,6 +9,7 @@
 #include <cctype>
 #include <mutex>
 #include <numeric>
+#include <tuple>
 
 //For the Utils
 #include <cstdint>
@@ -582,6 +583,72 @@ vector<Triangle> edges_to_triangles(const vector<Edge>& edges, int delta) {
       }
     }
   }
+  return tris;
+}
+
+std::optional<vector<Triangle>> refine(int delta, const vector<Edge>& edges) {
+  if (delta < 1) throw std::invalid_argument("delta must be >= 1");
+  const int nverts = num_vertices(delta);
+  // idx_to_point locks a mutex per call; hoist the coordinates out of the loops
+  vector<pair<int, int>> pts(nverts);
+  for (int i = 0; i < nverts; ++i) pts[i] = idx_to_point(delta, i);
+  vector<Edge> forced;
+  for (Edge e : edges) {
+    if (e.first < 0 || e.first >= nverts || e.second < 0 || e.second >= nverts)
+      throw std::invalid_argument("edge vertex index out of range");
+    if (e.first == e.second) throw std::invalid_argument("degenerate edge");
+    auto [xa, ya] = pts[e.first];
+    auto [xb, yb] = pts[e.second];
+    if (std::gcd(abs(xa - xb), abs(ya - yb)) != 1)
+      throw std::invalid_argument("non-primitive edge");
+    if (e.second < e.first) std::swap(e.first, e.second);
+    forced.push_back(e);
+  }
+  sort(forced.begin(), forced.end());
+  forced.erase(unique(forced.begin(), forced.end()), forced.end());
+  // Primitive lattice edges can only conflict by proper crossing.
+  auto orient = [&](int i, int j, int k) {
+    auto [xa, ya] = pts[i];
+    auto [xb, yb] = pts[j];
+    auto [xc, yc] = pts[k];
+    int det = (xb - xa) * (yc - ya) - (yb - ya) * (xc - xa);
+    return (det > 0) - (det < 0);
+  };
+  auto cross_properly = [&](const Edge& e, const Edge& f) {
+    return orient(e.first, e.second, f.first) *
+               orient(e.first, e.second, f.second) < 0 &&
+           orient(f.first, f.second, e.first) *
+               orient(f.first, f.second, e.second) < 0;
+  };
+  for (size_t a = 0; a < forced.size(); ++a)
+    for (size_t b = a + 1; b < forced.size(); ++b)
+      if (cross_properly(forced[a], forced[b])) return std::nullopt;
+  // all primitive edges, shortest first, accept whatever does not cross an accepted edge.
+  struct Cand { int len2; Edge e; };
+  vector<Cand> pool;
+  for (int i = 0; i < nverts; ++i)
+    for (int j = i + 1; j < nverts; ++j) {
+      const int dx = pts[j].first - pts[i].first;
+      const int dy = pts[j].second - pts[i].second;
+      if (std::gcd(abs(dx), abs(dy)) == 1)
+        pool.push_back({dx * dx + dy * dy, {i, j}});
+    }
+  sort(pool.begin(), pool.end(), [](const Cand& a, const Cand& b) {
+    return std::tie(a.len2, a.e) < std::tie(b.len2, b.e);
+  });
+  vector<Edge> all_edges = forced;
+  for (const Cand& c : pool) {
+    if (std::find(all_edges.begin(), all_edges.end(), c.e) != all_edges.end())
+      continue;
+    bool ok = true;
+    for (const Edge& a : all_edges)
+      if (cross_properly(c.e, a)) { ok = false; break; }
+    if (ok) all_edges.push_back(c.e);
+  }
+  if (static_cast<int>(all_edges.size()) != 3 * (delta * delta + delta) / 2)
+    return std::nullopt;
+  vector<Triangle> tris = edges_to_triangles(all_edges, delta);
+  if (static_cast<int>(tris.size()) != delta * delta) return std::nullopt;
   return tris;
 }
 
