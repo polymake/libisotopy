@@ -9,6 +9,7 @@
 
 using Isotopy::Point;
 using Isotopy::Split;
+using Isotopy::compatible;
 using Isotopy::signs_from_splits;
 using Isotopy::triangulation_from_splits;
 
@@ -229,9 +230,21 @@ TEST_CASE("triangulation_from_splits: scheme independent of refinement", "[haas]
   REQUIRE(gs.viro_notation() == "<17v1<2v1<1>>>");
 }
 
-TEST_CASE("triangulation_from_splits: crossing splits give nullopt, invalid split throws", "[haas]") {
+TEST_CASE("compatible: shared endpoints ok, shared edge or crossing not", "[haas]") {
+  REQUIRE(compatible(8, {B, D1, D2}));  // D1 shares only the vertex (5,3) with B
+  const Split shares_edge{{0, 1}, {5, 3}, {0, 7}};  // first edge == B
+  REQUIRE_FALSE(compatible(8, {B, shares_edge}));
+  REQUIRE_FALSE(compatible(8, {B, B}));
+  const Split crossing{{2, 0}, {0, 5}};  // crosses B
+  REQUIRE_FALSE(compatible(8, {B, crossing}));
+  REQUIRE_THROWS_AS(compatible(8, {Split{{0, 1}, {0, 3}}}), std::invalid_argument);
+}
+
+TEST_CASE("triangulation_from_splits: incompatible collections give nullopt, invalid split throws", "[haas]") {
   const Split crossing{{2, 0}, {0, 5}};  // crosses B
   REQUIRE_FALSE(triangulation_from_splits(8, {B, crossing}).has_value());
+  const Split shares_edge{{0, 1}, {5, 3}, {0, 7}};
+  REQUIRE_FALSE(triangulation_from_splits(8, {B, shares_edge}).has_value());
   REQUIRE_THROWS_AS(triangulation_from_splits(8, {Split{{0, 1}, {0, 3}}}),
                     std::invalid_argument);
 }

@@ -20,7 +20,8 @@ using Split = std::vector<Point>;
  * Harnack signs eta(x, y) = (x+1)(y+1) mod 2 twisted by each split: with
  * parity pair {a, b} the twist adds a0*b1+a1*b0 + (a1+b1)x + (a0+b0)y mod 2
  * on the split's zone, flipping exactly the two parity classes not in {a, b}.
- * Twists commute; pairwise compatibility is NOT checked.
+ * Twists commute; compatibility of the collection is NOT checked here, use
+ * compatible().
  *
  * Zone convention: path canonicalized so its lexicographically smaller
  * endpoint comes first; zone = side with fewer simplex corners off the path;
@@ -40,6 +41,19 @@ std::vector<bool> signs_from_splits(int delta,
                                     const std::vector<Split>& splits);
 
 /**
+ * @brief Haas compatibility of a split collection.
+ *
+ * Compatible = no two splits share an edge and no two split edges cross.
+ * Shared endpoints are allowed.  A split listed twice makes the collection
+ * incompatible.
+ *
+ * @param delta The degree of the patchwork.
+ * @param splits The split collection.
+ * @throws std::invalid_argument on delta < 1 or an invalid split.
+ */
+bool compatible(int delta, const std::vector<Split>& splits);
+
+/**
  * @brief Unimodular triangulation refining the splits.
  *
  * Specialization of refine(): the forced edges are the split edges.
@@ -47,8 +61,8 @@ std::vector<bool> signs_from_splits(int delta,
  *
  * @param delta The degree of the patchwork.
  * @param splits The split collection.
- * @return The triangulation, or std::nullopt if the split edges conflict,
- *         e.g. for crossing splits.
+ * @return The triangulation, or std::nullopt if the collection is not
+ *         compatible().
  * @throws std::invalid_argument on delta < 1 or an invalid split.
  */
 std::optional<std::vector<Triangle>> triangulation_from_splits(

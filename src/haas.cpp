@@ -170,15 +170,33 @@ std::vector<bool> signs_from_splits(int delta,
   return sigma;
 }
 
-std::optional<std::vector<Triangle>> triangulation_from_splits(
-    int delta, const std::vector<Split>& splits) {
+bool compatible(int delta, const std::vector<Split>& splits) {
   if (delta < 1) throw std::invalid_argument("delta must be >= 1");
-  std::vector<Edge> edges;
+  std::vector<std::pair<Point, Point>> edges;
   for (const Split& s : splits) {
     validate_split(s, delta);
     for (size_t k = 0; k + 1 < s.size(); ++k)
-      edges.push_back({flat_idx(delta, s[k]), flat_idx(delta, s[k + 1])});
+      edges.push_back(std::minmax(s[k], s[k + 1]));
   }
+  for (size_t a = 0; a < edges.size(); ++a)
+    for (size_t b = a + 1; b < edges.size(); ++b) {
+      const auto& [p, q] = edges[a];
+      const auto& [r, t] = edges[b];
+      if (edges[a] == edges[b]) return false;
+      const long s1 = (long)cross(p, q, r) * cross(p, q, t);
+      const long s2 = (long)cross(r, t, p) * cross(r, t, q);
+      if (s1 < 0 && s2 < 0) return false;
+    }
+  return true;
+}
+
+std::optional<std::vector<Triangle>> triangulation_from_splits(
+    int delta, const std::vector<Split>& splits) {
+  if (!compatible(delta, splits)) return std::nullopt;
+  std::vector<Edge> edges;
+  for (const Split& s : splits)
+    for (size_t k = 0; k + 1 < s.size(); ++k)
+      edges.push_back({flat_idx(delta, s[k]), flat_idx(delta, s[k + 1])});
   return refine(delta, edges);
 }
 
