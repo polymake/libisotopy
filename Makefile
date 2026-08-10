@@ -1,6 +1,10 @@
 CXX = g++
 MAX_DELTA ?= 20
-CXXFLAGS = -std=c++20 -Wall -Wextra -O2 -Iinclude -fPIC -DMAX_DELTA=$(MAX_DELTA)
+# ARCH is overridable so a -march=native binary (safe on the cluster's fixed
+# 2080Ti nodes, where we build on the run host) can be dropped for cross-host
+# builds that would otherwise SIGILL.  Build with `make ARCH=` to disable.
+ARCH ?= -march=native
+CXXFLAGS = -std=c++20 -Wall -Wextra -O3 -flto=auto $(ARCH) -Iinclude -fPIC -DMAX_DELTA=$(MAX_DELTA)
 BIN_DIR = bin
 TEST_DIR = $(BIN_DIR)/tests
 BENCHMARK_DIR = $(BIN_DIR)/benchmarks
@@ -36,7 +40,7 @@ $(BENCHMARK_DIR): | $(BIN_DIR)
 	mkdir -p $(BENCHMARK_DIR)
 
 $(TARGET): $(OBJ)
-	$(CXX) -shared -o $@ $^
+	$(CXX) $(CXXFLAGS) -shared -o $@ $^
 
 test: $(TEST_BIN)
 	./$(TEST_BIN)
