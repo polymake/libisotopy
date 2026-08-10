@@ -352,6 +352,10 @@ private:
    */
 string viro_notation(int root_region, const Adjacency& region_adjacency, bool unicode = false);
 
+// Returns the region tree in DFS order as (parent_index, leaf_count) pairs.
+// Index 0 = root (parent = -1). Mirrors the DFS used in viro_notation().
+vector<pair<int,int>> get_region_tree(int root_region, const Adjacency& region_adjacency);
+
 /**
  * @brief Computes the number of vertices in a triangular grid of degree delta.
  *
@@ -467,6 +471,14 @@ inline vector<Edge> triangles_to_edges(int /*delta*/, const std::set<std::set<in
  */
 int original_idx(int delta, int idx);
 
+/**
+ * @brief Reconstruct triangulation faces from a flat edge list.
+ *
+ * Finds 3-cliques in the adjacency graph and keeps only unit-area triangles
+ * (|area2|==1), filtering false positives from non-minimal 3-cliques.
+ */
+vector<Triangle> edges_to_triangles(const vector<Edge>& edges, int delta);
+
 }
 
 namespace Utils {
@@ -475,6 +487,11 @@ namespace Utils {
 using Isotopy::vector;
 using Isotopy::string;
 using Isotopy::pair;
+
+vector<vector<int>> partitions_of_length_k(int n, int k);
+vector<vector<int>> partitions_of_max_length_k(int n, int k);
+vector<pair<int, int>> get_random_triangulation(int delta);
+vector<std::string> trees_of_size(int n);
 
 /**
  * @brief Returns a map from lattice point coordinates to vertex indices for degree delta.

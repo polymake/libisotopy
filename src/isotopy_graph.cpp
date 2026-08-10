@@ -8,6 +8,7 @@
 #include <string>
 #include <cctype>
 #include <mutex>
+#include <numeric>
 
 //For the Utils
 #include <cstdint>
@@ -478,6 +479,34 @@ string viro_notation(int root_region, const Adjacency& region_adjacency, bool un
   return dfs(root_region);
 }
 
+vector<pair<int,int>> get_region_tree(int root_region, const Adjacency& region_adjacency) {
+  vector<pair<int,int>> result;
+  vector<bool> visited(region_adjacency.size(), false);
+
+  function<void(int, int)> dfs = [&](int curr, int parent_idx) {
+    int my_idx = (int)result.size();
+    result.push_back({parent_idx, 0});
+    visited[curr] = true;
+
+    int leaf_count = 0;
+    vector<int> non_leaf_children;
+    for (int nb : region_adjacency[curr]) {
+      if (!visited[nb]) {
+        bool is_leaf = true;
+        for (int nn : region_adjacency[nb])
+          if (!visited[nn] && nn != curr) { is_leaf = false; break; }
+        if (is_leaf) { leaf_count++; visited[nb] = true; }
+        else           non_leaf_children.push_back(nb);
+      }
+    }
+    result[my_idx].second = leaf_count;
+    for (int child : non_leaf_children) dfs(child, my_idx);
+  };
+
+  dfs(root_region, -1);
+  return result;
+}
+
 int num_vertices(int delta) {
   return (delta + 1) * (delta + 2) / 2;
 }
@@ -525,6 +554,35 @@ vector<Edge> triangles_to_edges(const std::set<std::set<int>>& triangles) {
     tri_vec.push_back({sorted_tri[0], sorted_tri[1], sorted_tri[2]});
   }
   return triangles_to_edges(tri_vec);
+}
+
+// Reconstruct triangulation faces from an edge list.
+// Finds all 3-cliques in the adjacency graph, but only keeps unit-area triangles
+// (|area2|==1 by Pick's theorem) to avoid false positives where three vertices are
+// pairwise connected but a fourth vertex sits inside their convex hull.
+vector<Triangle> edges_to_triangles(const vector<Edge>& edges, int delta) {
+  map<int, set<int>> adj;
+  for (auto [u, v] : edges) { adj[u].insert(v); adj[v].insert(u); }
+
+  set<Triangle> seen;
+  vector<Triangle> tris;
+  for (auto [u, v] : edges) {
+    for (int w : adj[u]) {
+      if (adj[v].count(w)) {
+        Triangle t = {u, v, w};
+        sort(t.begin(), t.end());
+        if (seen.insert(t).second) {
+          auto [xa, ya] = idx_to_point(delta, t[0]);
+          auto [xb, yb] = idx_to_point(delta, t[1]);
+          auto [xc, yc] = idx_to_point(delta, t[2]);
+          int area2 = (xb-xa)*(yc-ya) - (yb-ya)*(xc-xa);
+          if (area2 == 1 || area2 == -1)
+            tris.push_back(t);
+        }
+      }
+    }
+  }
+  return tris;
 }
 
 // Helper to build coordinate mapping for a given delta (cached)
@@ -912,6 +970,207 @@ void Graph::update_sign(int vector_index) {
 }  // namespace Isotopy
 
 namespace Utils {
+
+vector<int> transpose_partition(const vector<int>& input){
+   int size= input.back();
+   vector<int> result(size);
+   for(const auto& i: input){
+      for(int j=0; j<i; j++){
+         result[size-1-j]++;
+      }
+   }
+   return result;
+}
+
+vector<vector<int>> partitions_of_height_k(int n, int k){
+   vector<vector<int>> result;
+   if(n<k){ return result; }
+   if(k==1){
+      vector<int> tmp(n);
+      for(unsigned int i=0; i<tmp.size(); i++){
+         tmp[i]=1;
+      }
+      result.push_back(tmp);
+      return result;
+   }
+   if(k == n){
+      vector<int> tmp{n};
+      result.push_back(tmp);
+      return result;
+   }
+   for(int i=1; i<=k; i++){
+      auto tail = partitions_of_height_k(n-k, i);
+      for(const auto& p: tail){
+         vector<int> tmp(p);
+         tmp.push_back(k);
+         result.push_back(tmp);
+      }
+   }
+   return result;
+}
+
+vector<vector<int>> partitions_of_length_k(int n, int k){
+   vector<vector<int>> result;
+   for(const auto& p : partitions_of_height_k(n, k)){
+      result.push_back(transpose_partition(p));
+   }
+   return result;
+}
+
+vector<vector<int>> partitions_of_max_length_k(int n, int k){
+   vector<vector<int>> result;
+   for(int i=1; i<=k; i++){
+      auto next = partitions_of_length_k(n, i);
+      result.insert(result.end(),
+            std::make_move_iterator(next.begin()),
+            std::make_move_iterator(next.end()));
+   }
+   return result;
+}
+
+vector<std::string> trees_of_size(int n){
+   std::string root("o");
+   if(n == 1){ return vector<std::string>{root}; }
+   vector<std::string> result;
+   std::string trivial = "o[";
+   bool first = true;
+   for(int i=1; i<=n-1; i++){
+      trivial += (first ? "o" : ",o");
+      first = false;
+   }
+   trivial += "]";
+   result.push_back(trivial);
+   for(int i=1; i<=n-1; i++){
+      for(const auto& p: partitions_of_max_length_k(n-i-1, i)){
+         auto it = p.rbegin();
+         vector<std::string> inner_res{"o["};
+         bool first = true;
+         while(it != p.rend()){
+            auto sts = trees_of_size(*it+1);
+            vector<std::string> newres{};
+            for(const auto& t : sts){
+               for(const auto& r : inner_res){
+                  std::string concat = r + (first ? "" : ",") + t;
+                  newres.push_back(concat);
+               }
+            }
+            std::swap(newres, inner_res);
+            ++it;
+            first = false;
+         }
+         std::string tail = "";
+         vector<std::string> newres;
+         first = true;
+         for(int j=0; j<i-p.size(); j++){
+            tail += (first ? "o" : ",o");
+            first = false;
+         }
+         tail = tail + "]";
+         for(const auto& r : inner_res){
+            std::string concat = r + (i>p.size() ? "," : "")+ tail;
+            newres.push_back(concat);
+         }
+         std::swap(newres, inner_res);
+         result.insert(result.end(),
+               std::make_move_iterator(inner_res.begin()),
+               std::make_move_iterator(inner_res.end()));
+      }
+   }
+   return result;
+}
+
+// Copied from hilbert_encoding.pl
+int orientation(int i, int j, int k, const map<int, vector<int>>& int2pt){
+  const vector<int>& p0(int2pt.at(i)), p1(int2pt.at(j)), p2(int2pt.at(k));
+  int det=0;
+  for(int a = 0; a<3; a++){
+    det += p0[a] * p1[(a+1)%3] * p2[(a+2)%3];
+    det -= p0[a] * p1[(a+2)%3] * p2[(a+1)%3];
+  }
+  if(det == 0) return 0;
+  else if(det >0) return 1;
+  else return -1;
+}
+
+bool segments_intersect(int i, int j, int k, int l, const map<int, vector<int>>& int2pt){
+  int ijk = orientation(i, j, k, int2pt);
+  if(ijk == 0) return false;
+  int ijl = orientation(i, j, l, int2pt);
+  if(ijk == 0 || ijk == ijl) return false;
+  int kli = orientation(k, l, i, int2pt);
+  if(kli ==0) return false;
+  int klj = orientation(k, l, j, int2pt);
+  if(klj == 0 || kli == klj) return false;
+  return true;
+}
+
+
+void remove_intersecting_edges(vector<pair<int, int>>& edges, const pair<int, int>& edge, const map<int, vector<int>>& int2pt){
+  edges.erase(
+    std::remove_if(edges.begin(), edges.end(),
+        [&](const std::pair<int,int>& x) {
+            return segments_intersect(x.first, x.second, edge.first, edge.second, int2pt);
+        }),
+    edges.end()
+);
+}
+
+pair<int, int> get_and_remove_random_edge(vector<pair<int, int>>& edges){
+  pair<int, int> result;
+  int pos = std::rand() % edges.size();
+  auto iter = edges.begin();
+  for(int i=0; i<pos; i++){
+    iter++;
+  }
+  result = *iter;
+  edges.erase(iter);
+  return result;
+}
+
+vector<pair<int, int>> get_random_triangulation(int delta, const vector<pair<int, int>>& existing_edges) {
+// void get_random_triangulation(int delta) {
+  map<vector<int>, int> pt2int;
+  map<int, vector<int>> int2pt;
+  int ptct = 0;
+  for(int x = 0; x<=delta; x++){
+    for(int y = 0; y<=delta-x; y++){
+      vector<int> pt{x,y,1};
+      pt2int[pt] = ptct;
+      int2pt[ptct] = pt;
+      ptct++;
+    }
+  }
+  vector<pair<int, int>> primitive_edges;
+  for(int i=0; i<ptct; i++){
+    for(int j=i+1; j<ptct; j++){
+      vector<int> p0(int2pt[i]), p1(int2pt[j]);
+      int check = std::gcd(p0[0]-p1[0], p0[1]-p1[1]);
+      if(check == 1){
+        primitive_edges.push_back(pair<int, int>{i, j});
+      }
+    }
+  }
+  for(const auto& e: existing_edges){
+    remove_intersecting_edges(primitive_edges, e, int2pt);
+  }
+  // std::cout << "Length after init: " << primitive_edges.size() << std::endl;
+  vector<pair<int, int>> result;
+  while(!primitive_edges.empty()){
+    pair<int, int> ne(get_and_remove_random_edge(primitive_edges));
+    result.push_back(ne);
+    // std::cout << "Adding edge: " << ne.first << " " << ne.second << std::endl;
+    // std::cout << "Result length: " << result.size() << std::endl;
+    remove_intersecting_edges(primitive_edges, ne, int2pt);
+  }
+  // int target = 3 * delta + (3 * (delta * delta - delta)) / 2;
+  // std::cout << "Target is " << target << std::endl;
+  return result;
+}
+
+vector<pair<int, int>> get_random_triangulation(int delta) {
+  vector<pair<int, int>> ee;
+  return get_random_triangulation(delta, ee);
+}
 
 // map<pair<int,int>, int> get_pt2int(int delta) {
 //   map<pair<int,int>, int> pt2int;

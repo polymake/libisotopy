@@ -22,6 +22,16 @@ TEST_CASE("Constructor: Graph from set<set<int>> (triangulation)", "[isotopy_gra
   std::string expected_viro = "<1<1<1<1>>>>";
   REQUIRE(graph.viro_notation() == expected_viro);
   std::map<std::pair<int,int>, int> pt_map = Utils::get_pt2int(delta);
+  auto rt = Utils::get_random_triangulation(8);
+  auto phk = Utils::partitions_of_max_length_k(10,10);
+  auto tn = Utils::trees_of_size(6);
+  int i = 0;
+  for(const auto& t:tn){
+      std::cout << i << ": " << t << std::endl;
+      i++;
+  }
+  REQUIRE(rt.size() == 108);
+  REQUIRE(phk.size() == 42);
   REQUIRE(graph.component[pt_map.at(std::make_pair(0,0))] == graph.component[pt_map.at(std::make_pair(0,1))]);
   REQUIRE(graph.component[pt_map.at(std::make_pair(0,0))] == graph.component[pt_map.at(std::make_pair(1,0))]);
   REQUIRE(graph.component[pt_map.at(std::make_pair(0,-1))] == graph.component[pt_map.at(std::make_pair(1,-1))]);
@@ -623,4 +633,243 @@ TEST_CASE("Graph constructor - delta exceeds MAX_DELTA", "[isotopy][bounds]") {
     std::vector<Isotopy::Triangle> triangles = {{0, 1, 2}};
 
     REQUIRE_THROWS_AS(Isotopy::Graph(delta, signs, triangles), std::invalid_argument);
+}
+
+// ──────────────── Incremental-vs-fresh cross-check fuzzer ────────────────────
+//
+// Strategy: run many random flip+sign walks from random starting triangulations.
+// After each isotopy_type() call, rebuild a FRESH graph from the same
+// (tri_list, polarisation) and compare results.  Any mismatch means the
+// incremental path has diverged from ground truth.  Also check Harnack bound.
+// On failure, print the seed and step so a hardcoded reproducer can be written.
+
+// Build triangles from an edge list by finding 3-cliques in the adjacency graph,
+// keeping only UNIT-AREA triangles (|area2|==1, i.e., Pick's-theorem minimal faces).
+// False 3-cliques arise when three vertices are pairwise connected but the interior
+// contains another vertex — these have |area2|>1 and must be filtered out.
+static std::vector<Isotopy::Triangle> edges_to_triangles(
+        const std::vector<Isotopy::Edge>& edges, int delta) {
+    std::map<int, std::set<int>> adj;
+    for (auto [u, v] : edges)
+        adj[u].insert(v), adj[v].insert(u);
+
+    std::set<Isotopy::Triangle> seen;
+    std::vector<Isotopy::Triangle> tris;
+    for (auto [u, v] : edges) {
+        for (int w : adj[u]) {
+            if (adj[v].count(w)) {
+                Isotopy::Triangle t = {u, v, w};
+                std::sort(t.begin(), t.end());
+                if (seen.insert(t).second) {
+                    auto [xa, ya] = Isotopy::idx_to_point(delta, t[0]);
+                    auto [xb, yb] = Isotopy::idx_to_point(delta, t[1]);
+                    auto [xc, yc] = Isotopy::idx_to_point(delta, t[2]);
+                    int area2 = (xb-xa)*(yc-ya) - (yb-ya)*(xc-xa);
+                    if (area2 == 1 || area2 == -1)
+                        tris.push_back(t);
+                }
+            }
+        }
+    }
+    return tris;
+}
+
+// Reads current polarisation[0..nverts-1] back into a bool vector.
+static std::vector<bool> read_q1_signs(const Isotopy::Graph& g) {
+    std::vector<bool> s(g.nverts);
+    for (int i = 0; i < g.nverts; ++i) s[i] = g.polarisation[i];
+    return s;
+}
+
+TEST_CASE("incremental==fresh for random triangulations (delta=4, multi-seed)", "[regression][fuzzer]") {
+    constexpr int delta = 4;
+    const int nverts     = Isotopy::num_vertices(delta);
+    const int max_regions = (delta-1)*(delta-2)/2 + 1;
+
+    constexpr int n_starts    = 200;   // random starting triangulations
+    constexpr int steps_each  = 300;   // steps per start
+
+    for (int seed = 0; seed < n_starts; ++seed) {
+        // get_random_triangulation uses std::rand(); seed it per outer iteration
+        std::srand((unsigned)seed);
+        auto edges = Utils::get_random_triangulation(delta);
+        auto triangles = edges_to_triangles(edges, delta);
+        if (triangles.empty()) continue;
+
+        // random initial signs (first 3 vertices locked true)
+        std::mt19937 rng((unsigned)seed * 1000003u);
+        std::vector<bool> signs(nverts);
+        signs[0] = signs[1] = signs[2] = true;
+        for (int i = 3; i < nverts; ++i) signs[i] = (rng() & 1);
+
+        Isotopy::Graph g(delta, signs, triangles);
+        g.prepare(triangles);
+
+        std::uniform_real_distribution<double> coin(0.0, 1.0);
+
+        for (int step = 0; step < steps_each; ++step) {
+            g.isotopy_type();
+
+            int p = g.p_regions, n = g.n_regions;
+
+            // --- Fresh-graph cross-check (runs before Harnack so we see both values) ---
+            {
+                auto tri_snap  = g.tri_list;
+                auto sign_snap = read_q1_signs(g);
+                Isotopy::Graph fresh(delta, sign_snap, tri_snap);
+                fresh.isotopy_type();
+                INFO("seed=" << seed << " step=" << step
+                     << " incremental p=" << p << " n=" << n
+                     << " | fresh p=" << fresh.p_regions << " n=" << fresh.n_regions);
+                REQUIRE(g.p_regions == fresh.p_regions);
+                REQUIRE(g.n_regions == fresh.n_regions);
+            }
+
+            // --- Harnack bound check ---
+            INFO("seed=" << seed << " step=" << step
+                 << " p=" << p << " n=" << n << " max=" << max_regions);
+            REQUIRE(p >= 0);
+            REQUIRE(p <= max_regions);
+            if (n >= 0) REQUIRE(n <= max_regions);
+            REQUIRE(p + std::max(0, n) <= max_regions);
+
+            // advance state
+            auto flippable = g.flippable_edges();
+            if (!flippable.empty() && coin(rng) < 0.7) {
+                std::uniform_int_distribution<int> pick(0, (int)flippable.size()-1);
+                g.update_edge(flippable[pick(rng)]);
+            } else {
+                std::uniform_int_distribution<int> pick(3, nverts-1);
+                g.update_sign(pick(rng));
+            }
+        }
+    }
+}
+
+TEST_CASE("incremental==fresh for random triangulations (delta=5, multi-seed)", "[regression][fuzzer]") {
+    constexpr int delta = 5;
+    const int nverts      = Isotopy::num_vertices(delta);
+    const int max_regions = (delta-1)*(delta-2)/2 + 1;
+
+    constexpr int n_starts    = 100;
+    constexpr int steps_each  = 200;
+
+    for (int seed = 0; seed < n_starts; ++seed) {
+        std::srand((unsigned)seed + 9999u);
+        auto edges = Utils::get_random_triangulation(delta);
+        auto triangles = edges_to_triangles(edges, delta);
+        if (triangles.empty()) continue;
+
+        std::mt19937 rng((unsigned)seed * 999983u);
+        std::vector<bool> signs(nverts);
+        signs[0] = signs[1] = signs[2] = true;
+        for (int i = 3; i < nverts; ++i) signs[i] = (rng() & 1);
+
+        Isotopy::Graph g(delta, signs, triangles);
+        g.prepare(triangles);
+
+        std::uniform_real_distribution<double> coin(0.0, 1.0);
+
+        for (int step = 0; step < steps_each; ++step) {
+            g.isotopy_type();
+
+            int p = g.p_regions, n = g.n_regions;
+
+            {
+                auto tri_snap  = g.tri_list;
+                auto sign_snap = read_q1_signs(g);
+                Isotopy::Graph fresh(delta, sign_snap, tri_snap);
+                fresh.isotopy_type();
+                INFO("seed=" << seed << " step=" << step
+                     << " incremental p=" << p << " n=" << n
+                     << " | fresh p=" << fresh.p_regions << " n=" << fresh.n_regions);
+                REQUIRE(g.p_regions == fresh.p_regions);
+                REQUIRE(g.n_regions == fresh.n_regions);
+            }
+
+            // Harnack bound (should be implied by fresh==incremental + fresh being correct,
+            // but kept as a belt-and-suspenders check)
+            INFO("seed=" << seed << " step=" << step
+                 << " p=" << p << " n=" << n << " max=" << max_regions);
+            REQUIRE(p + std::max(0, n) <= max_regions);
+
+            auto flippable = g.flippable_edges();
+            if (!flippable.empty() && coin(rng) < 0.7) {
+                std::uniform_int_distribution<int> pick(0, (int)flippable.size()-1);
+                g.update_edge(flippable[pick(rng)]);
+            } else {
+                std::uniform_int_distribution<int> pick(3, nverts-1);
+                g.update_sign(pick(rng));
+            }
+        }
+    }
+}
+
+// ─────────────────────── Targeted reproducer (seed=3 delta=4) ──────────────────
+// Replays exact sequence, dumps state at the violation for root-cause analysis.
+TEST_CASE("reproducer: seed=3 delta=4 step=140 p_regions>max", "[regression][reproducer]") {
+    constexpr int delta = 4;
+    const int nverts      = Isotopy::num_vertices(delta);
+    const int max_regions = (delta-1)*(delta-2)/2 + 1;
+
+    std::srand(3u);
+    auto edges     = Utils::get_random_triangulation(delta);
+    auto triangles = edges_to_triangles(edges, delta);
+    REQUIRE(!triangles.empty());
+
+    std::mt19937 rng(3u * 1000003u);
+    std::vector<bool> signs(nverts);
+    signs[0] = signs[1] = signs[2] = true;
+    for (int i = 3; i < nverts; ++i) signs[i] = (rng() & 1);
+
+    Isotopy::Graph g(delta, signs, triangles);
+    g.prepare(triangles);
+    std::uniform_real_distribution<double> coin(0.0, 1.0);
+
+    for (int step = 0; step <= 140; ++step) {
+        g.isotopy_type();
+
+        if (step == 140) {
+            std::cout << "\n=== REPRODUCER: seed=3 delta=4 step=140 ===\n";
+            std::cout << "p=" << g.p_regions << " n=" << g.n_regions
+                      << " region_count=" << g.region_count
+                      << " ncomponents=" << g.ncomponents << "\n";
+            std::cout << "root=" << g.root << " root_region=" << g.root_region << "\n";
+
+            std::cout << "tri_list (" << g.tri_list.size() << " triangles):\n";
+            bool degenerate = false;
+            for (size_t ti = 0; ti < g.tri_list.size(); ++ti) {
+                auto [a, b, c] = g.tri_list[ti];
+                if (a==b||b==c||a==c) degenerate = true;
+                std::cout << "  [" << ti << "] " << a << " " << b << " " << c
+                          << ((a==b||b==c||a==c)?" <DEGEN>":"") << "\n";
+            }
+
+            std::cout << "Q1 signs: ";
+            for (int i = 0; i < nverts; ++i) std::cout << (g.polarisation[i]?"+":"-");
+            std::cout << "\n";
+
+            std::cout << "antipodal_partner (" << g.antipodal_partner.size() << " pairs):\n";
+            for (auto [p1, p2] : g.antipodal_partner) {
+                auto [x1, y1] = Isotopy::idx_to_point(delta, p1);
+                auto [x2, y2] = Isotopy::idx_to_point(delta, p2);
+                std::cout << "  (" << x1 << "," << y1 << ")<->(" << x2 << "," << y2 << ")"
+                          << "  idx=" << p1 << "<->" << p2
+                          << "  comp=" << g.component[g.parent[p1]]
+                          << "<->" << g.component[g.parent[p2]] << "\n";
+            }
+
+            CHECK(g.p_regions <= max_regions);
+            break;
+        }
+
+        auto flippable = g.flippable_edges();
+        if (!flippable.empty() && coin(rng) < 0.7) {
+            std::uniform_int_distribution<int> epick(0, (int)flippable.size()-1);
+            g.update_edge(flippable[epick(rng)]);
+        } else {
+            std::uniform_int_distribution<int> vpick(3, nverts-1);
+            g.update_sign(vpick(rng));
+        }
+    }
 }
