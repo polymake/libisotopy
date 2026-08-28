@@ -163,7 +163,7 @@ TEST_CASE("signs_from_splits: invalid splits throw", "[haas]") {
   REQUIRE_THROWS_AS(signs_from_splits(8, {Split{{1, 2}, {2, 3}}}),
                     std::invalid_argument);  // interior endpoint
   REQUIRE_THROWS_AS(signs_from_splits(8, {Split{{0, 1}, {0, 2}, {0, 3}}}),
-                    std::invalid_argument);  // collinear double
+                    std::invalid_argument);  // collinear double, boundary apex
   REQUIRE_THROWS_AS(signs_from_splits(8, {Split{{0, 1}, {9, 0}}}),
                     std::invalid_argument);  // outside simplex
   REQUIRE_THROWS_AS(signs_from_splits(0, {}), std::invalid_argument);
@@ -247,4 +247,34 @@ TEST_CASE("triangulation_from_splits: incompatible collections give nullopt, inv
   REQUIRE_FALSE(triangulation_from_splits(8, {B, shares_edge}).has_value());
   REQUIRE_THROWS_AS(triangulation_from_splits(8, {Split{{0, 1}, {0, 3}}}),
                     std::invalid_argument);
+}
+
+TEST_CASE("signs_from_splits: collinear doubles with interior apex", "[haas]") {
+  // A collinear double is a straight cut P-M-Q subdivided at its interior
+  // midpoint; Haas' theorem needs these, and the degree-7 scheme <Jv3v1<11>>
+  // (jv3v1_11.pcom of the 121-curves data) is realizable only with them.
+  const Split cd1{{0, 1}, {2, 2}, {4, 3}};
+  const Split cd2{{1, 0}, {2, 2}, {3, 4}};
+  REQUIRE(signs_from_splits(7, {cd1}) ==
+          from_string("101010100000000111010010101111010110"));
+  REQUIRE(signs_from_splits(7, {cd2}) ==
+          from_string("101010100011111101010000111010000100"));
+  REQUIRE(signs_from_splits(7, {cd1, cd1}) == harnack(7));
+  const Split cd1r(cd1.rbegin(), cd1.rend());
+  REQUIRE(signs_from_splits(7, {cd1}) == signs_from_splits(7, {cd1r}));
+
+  const std::vector<Split> coll{cd1, cd2,
+                                {{2, 0}, {4, 3}}, {{3, 0}, {4, 3}},
+                                {{5, 0}, {4, 3}}, {{0, 2}, {3, 4}},
+                                {{0, 3}, {3, 4}}};
+  REQUIRE(compatible(7, coll));
+  const std::vector<bool> sig = signs_from_splits(7, coll);
+  REQUIRE(sig == from_string("101101110010101111001100010101111011"));
+  auto tris = triangulation_from_splits(7, coll);
+  REQUIRE(tris.has_value());
+  Isotopy::Graph g(7, sig, *tris);
+  REQUIRE(g.viro_notation() == "<Jv3v1<11>>");
+  REQUIRE(g.p_regions == 12);
+  REQUIRE(g.n_regions == 4);
+  REQUIRE(g.is_mcurve());
 }

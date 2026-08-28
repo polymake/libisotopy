@@ -29,7 +29,9 @@ using Split = std::vector<Point>;
  * last endpoint back to first.  Result is independent of input vertex order.
  *
  * Split validity: endpoints on the boundary, parities alternate, edges
- * primitive, doubles non-collinear.
+ * primitive.  Doubles may be collinear (a straight cut subdivided at its
+ * midpoint) as long as the apex is interior; a collinear double with a
+ * boundary apex lies entirely on the boundary and is rejected.
  *
  * @param delta The degree of the patchwork.
  * @param splits The split collection.

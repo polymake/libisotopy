@@ -57,8 +57,11 @@ void validate_split(const Split& s, int delta) {
     if (parity(s[0]) != parity(s[2]) || parity(s[0]) == parity(s[1]))
       throw std::invalid_argument(
           "double split parities must satisfy p0 == p2 != p1");
-    if (cross(s[0], s[2], s[1]) == 0)
-      throw std::invalid_argument("collinear double split");
+    // A collinear double is a straight cut through its interior midpoint and
+    // is a legal Harnack split; with the apex on the boundary the whole path
+    // lies on the boundary and the zone degenerates.
+    if (cross(s[0], s[2], s[1]) == 0 && on_boundary(s[1], delta))
+      throw std::invalid_argument("collinear double split with boundary apex");
   } else if (parity(s[0]) == parity(s[1])) {
     throw std::invalid_argument("simple split endpoints have equal parity");
   }
