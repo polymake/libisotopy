@@ -1,8 +1,10 @@
 #include "isotopy_graph.h"
 #include <algorithm>
+#include <atomic>
 #include <cassert>
 #include <functional>
 #include <iostream>
+#include <memory>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -557,48 +559,174 @@ vector<Edge> triangles_to_edges(const std::set<std::set<int>>& triangles) {
   return triangles_to_edges(tri_vec);
 }
 
+static const vector<pair<int,int>>& get_coord_table(int delta);
+
 // Reconstruct triangulation faces from an edge list.
 // Finds all 3-cliques in the adjacency graph, but only keeps unit-area triangles
 // (|area2|==1 by Pick's theorem) to avoid false positives where three vertices are
 // pairwise connected but a fourth vertex sits inside their convex hull.
+// Vertex ids may come from the total (all-quadrant) indexing, so the bitset
+// adjacency is sized by the largest id in the input.
 vector<Triangle> edges_to_triangles(const vector<Edge>& edges, int delta) {
-  map<int, set<int>> adj;
-  for (auto [u, v] : edges) { adj[u].insert(v); adj[v].insert(u); }
-
-  set<Triangle> seen;
-  vector<Triangle> tris;
+  const auto& coords = get_coord_table(delta);
+  int maxv = -1;
+  for (auto [u, v] : edges) maxv = std::max({maxv, u, v});
+  if (maxv < 0) return {};
+  if (maxv >= static_cast<int>(coords.size()))
+    throw out_of_range("edges_to_triangles: vertex index out of range");
+  const int n = maxv + 1;
+  const int words = (n + 63) / 64;
+  thread_local vector<uint64_t> adj;
+  adj.assign(static_cast<size_t>(n) * words, 0);
   for (auto [u, v] : edges) {
-    for (int w : adj[u]) {
-      if (adj[v].count(w)) {
-        Triangle t = {u, v, w};
+    adj[static_cast<size_t>(u) * words + (v >> 6)] |= uint64_t{1} << (v & 63);
+    adj[static_cast<size_t>(v) * words + (u >> 6)] |= uint64_t{1} << (u & 63);
+  }
+
+  // Emit each unit-area 3-clique at its first discovery: edges in input
+  // order, common neighbors ascending -- the same visit order, dedup and
+  // output as the map/set implementation this replaces.  Dedup is a
+  // generation-stamped table over packed sorted triples when the ids fit 6
+  // bits each, and a linear scan over the emitted triangles otherwise.
+  vector<Triangle> tris;
+  thread_local vector<uint32_t> stamp;
+  thread_local uint32_t generation = 0;
+  const bool packable = n <= 64;
+  if (packable) {
+    if (stamp.size() != size_t{1} << 18 || ++generation == 0) {
+      stamp.assign(size_t{1} << 18, 0);
+      generation = 1;
+    }
+  }
+  auto already_seen = [&](const Triangle& t) {
+    if (packable) {
+      uint32_t& s = stamp[(t[0] << 12) | (t[1] << 6) | t[2]];
+      if (s == generation) return true;
+      s = generation;
+      return false;
+    }
+    for (const Triangle& s : tris)
+      if (s == t) return true;
+    return false;
+  };
+  for (auto [u, v] : edges) {
+    const uint64_t* au = adj.data() + static_cast<size_t>(u) * words;
+    const uint64_t* av = adj.data() + static_cast<size_t>(v) * words;
+    for (int w = 0; w < words; ++w) {
+      uint64_t common = au[w] & av[w];
+      while (common) {
+        const int c = (w << 6) + __builtin_ctzll(common);
+        common &= common - 1;
+        Triangle t = {u, v, c};
         sort(t.begin(), t.end());
-        if (seen.insert(t).second) {
-          auto [xa, ya] = idx_to_point(delta, t[0]);
-          auto [xb, yb] = idx_to_point(delta, t[1]);
-          auto [xc, yc] = idx_to_point(delta, t[2]);
-          int area2 = (xb-xa)*(yc-ya) - (yb-ya)*(xc-xa);
-          if (area2 == 1 || area2 == -1)
-            tris.push_back(t);
-        }
+        if (already_seen(t)) continue;
+        auto [xa, ya] = coords[t[0]];
+        auto [xb, yb] = coords[t[1]];
+        auto [xc, yc] = coords[t[2]];
+        int area2 = (xb-xa)*(yc-ya) - (yb-ya)*(xc-xa);
+        if (area2 == 1 || area2 == -1)
+          tris.push_back(t);
       }
     }
   }
   return tris;
 }
 
+namespace {
+
+// Everything about refine's candidate geometry that is a pure function of
+// delta: the Q1 coordinates, the pool of primitive edges in the (length,
+// edge) greedy order, the pool id of every primitive vertex pair, and one
+// bitset row per pool edge marking which other pool edges it properly
+// crosses.  Built once per delta under a mutex; after that refine() reads it
+// lock-free and reduces to a greedy sweep over bitsets.
+struct RefineCache {
+  int nverts = 0;
+  int words = 0;                  // uint64 words per pool bitset row
+  vector<pair<int, int>> pts;     // Q1 coordinates by vertex index
+  vector<Edge> pool;              // primitive edges, shortest first
+  vector<int32_t> edge_id;        // nverts*nverts, vertex pair -> pool id
+  vector<uint64_t> cross;         // pool.size() rows of `words` words
+};
+
+const RefineCache& refine_cache(int delta) {
+  constexpr int kSlots = 65;
+  static std::atomic<const RefineCache*> slots[kSlots] = {};
+  static mutex m;
+  static map<int, std::unique_ptr<const RefineCache>> owner;
+  if (delta < kSlots) {
+    const RefineCache* p = slots[delta].load(std::memory_order_acquire);
+    if (p) return *p;
+  }
+  lock_guard<mutex> lock(m);
+  auto& owned = owner[delta];
+  if (!owned) {
+    auto c = std::make_unique<RefineCache>();
+    c->nverts = num_vertices(delta);
+    const int nverts = c->nverts;
+    c->pts.resize(nverts);
+    const auto& coords = get_coord_table(delta);
+    for (int i = 0; i < nverts; ++i) c->pts[i] = coords[i];
+    struct Cand { int len2; Edge e; };
+    vector<Cand> cands;
+    for (int i = 0; i < nverts; ++i)
+      for (int j = i + 1; j < nverts; ++j) {
+        const int dx = c->pts[j].first - c->pts[i].first;
+        const int dy = c->pts[j].second - c->pts[i].second;
+        if (std::gcd(abs(dx), abs(dy)) == 1)
+          cands.push_back({dx * dx + dy * dy, {i, j}});
+      }
+    sort(cands.begin(), cands.end(), [](const Cand& a, const Cand& b) {
+      return std::tie(a.len2, a.e) < std::tie(b.len2, b.e);
+    });
+    const size_t P = cands.size();
+    c->pool.reserve(P);
+    for (const Cand& k : cands) c->pool.push_back(k.e);
+    c->edge_id.assign(static_cast<size_t>(nverts) * nverts, -1);
+    for (size_t k = 0; k < P; ++k)
+      c->edge_id[static_cast<size_t>(c->pool[k].first) * nverts +
+                 c->pool[k].second] = static_cast<int32_t>(k);
+    auto orient = [&](int i, int j, int k) {
+      auto [xa, ya] = c->pts[i];
+      auto [xb, yb] = c->pts[j];
+      auto [xc, yc] = c->pts[k];
+      int det = (xb - xa) * (yc - ya) - (yb - ya) * (xc - xa);
+      return (det > 0) - (det < 0);
+    };
+    auto cross_properly = [&](const Edge& e, const Edge& f) {
+      return orient(e.first, e.second, f.first) *
+                 orient(e.first, e.second, f.second) < 0 &&
+             orient(f.first, f.second, e.first) *
+                 orient(f.first, f.second, e.second) < 0;
+    };
+    c->words = static_cast<int>((P + 63) / 64);
+    c->cross.assign(P * c->words, 0);
+    for (size_t a = 0; a < P; ++a)
+      for (size_t b = a + 1; b < P; ++b)
+        if (cross_properly(c->pool[a], c->pool[b])) {
+          c->cross[a * c->words + (b >> 6)] |= uint64_t{1} << (b & 63);
+          c->cross[b * c->words + (a >> 6)] |= uint64_t{1} << (a & 63);
+        }
+    owned = std::move(c);
+  }
+  if (delta < kSlots)
+    slots[delta].store(owned.get(), std::memory_order_release);
+  return *owned;
+}
+
+}  // namespace
+
 std::optional<vector<Triangle>> refine(int delta, const vector<Edge>& edges) {
   if (delta < 1) throw std::invalid_argument("delta must be >= 1");
-  const int nverts = num_vertices(delta);
-  // idx_to_point locks a mutex per call; hoist the coordinates out of the loops
-  vector<pair<int, int>> pts(nverts);
-  for (int i = 0; i < nverts; ++i) pts[i] = idx_to_point(delta, i);
+  const RefineCache& C = refine_cache(delta);
+  const int nverts = C.nverts;
   vector<Edge> forced;
   for (Edge e : edges) {
     if (e.first < 0 || e.first >= nverts || e.second < 0 || e.second >= nverts)
       throw std::invalid_argument("edge vertex index out of range");
     if (e.first == e.second) throw std::invalid_argument("degenerate edge");
-    auto [xa, ya] = pts[e.first];
-    auto [xb, yb] = pts[e.second];
+    auto [xa, ya] = C.pts[e.first];
+    auto [xb, yb] = C.pts[e.second];
     if (std::gcd(abs(xa - xb), abs(ya - yb)) != 1)
       throw std::invalid_argument("non-primitive edge");
     if (e.second < e.first) std::swap(e.first, e.second);
@@ -606,47 +734,49 @@ std::optional<vector<Triangle>> refine(int delta, const vector<Edge>& edges) {
   }
   sort(forced.begin(), forced.end());
   forced.erase(unique(forced.begin(), forced.end()), forced.end());
-  // Primitive lattice edges can only conflict by proper crossing.
-  auto orient = [&](int i, int j, int k) {
-    auto [xa, ya] = pts[i];
-    auto [xb, yb] = pts[j];
-    auto [xc, yc] = pts[k];
-    int det = (xb - xa) * (yc - ya) - (yb - ya) * (xc - xa);
-    return (det > 0) - (det < 0);
-  };
-  auto cross_properly = [&](const Edge& e, const Edge& f) {
-    return orient(e.first, e.second, f.first) *
-               orient(e.first, e.second, f.second) < 0 &&
-           orient(f.first, f.second, e.first) *
-               orient(f.first, f.second, e.second) < 0;
-  };
-  for (size_t a = 0; a < forced.size(); ++a)
-    for (size_t b = a + 1; b < forced.size(); ++b)
-      if (cross_properly(forced[a], forced[b])) return std::nullopt;
-  // all primitive edges, shortest first, accept whatever does not cross an accepted edge.
-  struct Cand { int len2; Edge e; };
-  vector<Cand> pool;
-  for (int i = 0; i < nverts; ++i)
-    for (int j = i + 1; j < nverts; ++j) {
-      const int dx = pts[j].first - pts[i].first;
-      const int dy = pts[j].second - pts[i].second;
-      if (std::gcd(abs(dx), abs(dy)) == 1)
-        pool.push_back({dx * dx + dy * dy, {i, j}});
-    }
-  sort(pool.begin(), pool.end(), [](const Cand& a, const Cand& b) {
-    return std::tie(a.len2, a.e) < std::tie(b.len2, b.e);
-  });
-  vector<Edge> all_edges = forced;
-  for (const Cand& c : pool) {
-    if (std::find(all_edges.begin(), all_edges.end(), c.e) != all_edges.end())
-      continue;
-    bool ok = true;
-    for (const Edge& a : all_edges)
-      if (cross_properly(c.e, a)) { ok = false; break; }
-    if (ok) all_edges.push_back(c.e);
+  // Every primitive edge is in the pool, so the forced edges become pool ids
+  // and both the pairwise conflict check (primitive lattice edges can only
+  // conflict by proper crossing) and the greedy completion run on the
+  // precomputed crossing bitsets.
+  const int words = C.words;
+  thread_local vector<uint64_t> forced_bits, accepted;
+  forced_bits.assign(words, 0);
+  for (const Edge& e : forced) {
+    const int32_t id =
+        C.edge_id[static_cast<size_t>(e.first) * nverts + e.second];
+    forced_bits[id >> 6] |= uint64_t{1} << (id & 63);
   }
-  if (static_cast<int>(all_edges.size()) != 3 * (delta * delta + delta) / 2)
-    return std::nullopt;
+  for (const Edge& e : forced) {
+    const int32_t id =
+        C.edge_id[static_cast<size_t>(e.first) * nverts + e.second];
+    const uint64_t* row = C.cross.data() + static_cast<size_t>(id) * words;
+    for (int w = 0; w < words; ++w)
+      if (row[w] & forced_bits[w]) return std::nullopt;
+  }
+  // All primitive edges, shortest first, accept whatever does not cross an
+  // accepted edge -- the same greedy order and acceptance rule as before,
+  // now a bitset test per candidate.
+  accepted = forced_bits;
+  const size_t P = C.pool.size();
+  for (size_t k = 0; k < P; ++k) {
+    if (accepted[k >> 6] >> (k & 63) & 1) continue;
+    const uint64_t* row = C.cross.data() + k * words;
+    bool ok = true;
+    for (int w = 0; w < words; ++w)
+      if (row[w] & accepted[w]) { ok = false; break; }
+    if (ok) accepted[k >> 6] |= uint64_t{1} << (k & 63);
+  }
+  int nedges = 0;
+  for (int w = 0; w < words; ++w) nedges += __builtin_popcountll(accepted[w]);
+  if (nedges != 3 * (delta * delta + delta) / 2) return std::nullopt;
+  // Materialize in the order the greedy used to build its edge list: the
+  // forced edges first, then the accepted pool edges in pool order.
+  vector<Edge> all_edges = forced;
+  all_edges.reserve(nedges);
+  for (size_t k = 0; k < P; ++k)
+    if ((accepted[k >> 6] >> (k & 63) & 1) &&
+        !(forced_bits[k >> 6] >> (k & 63) & 1))
+      all_edges.push_back(C.pool[k]);
   vector<Triangle> tris = edges_to_triangles(all_edges, delta);
   if (static_cast<int>(tris.size()) != delta * delta) return std::nullopt;
   return tris;
@@ -656,13 +786,22 @@ std::optional<vector<Triangle>> refine(int delta, const vector<Edge>& edges) {
 // This duplicates the quadrant indexing logic from Graph::initialize
 // but provides a standalone version for point_to_idx/idx_to_point functions
 static const vector<pair<int,int>>& get_coord_table(int delta) {
-  static map<int, vector<pair<int,int>>> cache;
+  // Lock-free once built: the callers (refine, edges_to_triangles, Graph)
+  // hit this from OpenMP teams, and a mutex per call serializes them.
+  constexpr int kSlots = 65;
+  static std::atomic<const vector<pair<int,int>>*> slots[kSlots] = {};
+  static map<int, std::unique_ptr<const vector<pair<int,int>>>> owner;
   static mutex cache_mutex;
+  if (delta >= 0 && delta < kSlots) {
+    const auto* p = slots[delta].load(std::memory_order_acquire);
+    if (p) return *p;
+  }
   lock_guard<mutex> lock(cache_mutex);
-
-  auto it = cache.find(delta);
-  if (it != cache.end()) {
-    return it->second;
+  auto& owned = owner[delta];
+  if (owned) {
+    if (delta >= 0 && delta < kSlots)
+      slots[delta].store(owned.get(), std::memory_order_release);
+    return *owned;
   }
 
   int nverts = num_vertices(delta);
@@ -702,8 +841,10 @@ static const vector<pair<int,int>>& get_coord_table(int delta) {
     }
   }
 
-  cache[delta] = std::move(coords);
-  return cache[delta];
+  owned = std::make_unique<const vector<pair<int,int>>>(std::move(coords));
+  if (delta >= 0 && delta < kSlots)
+    slots[delta].store(owned.get(), std::memory_order_release);
+  return *owned;
 }
 
 int point_to_idx(int delta, int x, int y) {
