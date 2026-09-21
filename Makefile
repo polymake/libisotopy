@@ -84,13 +84,80 @@ profiling: $(PROFILING_BIN) $(TEST_YAML)
 $(PROFILING_BIN): $(TARGET) $(PROFILING_OBJ) | $(BIN_DIR)
 	$(CXX) -o $@ $(PROFILING_OBJ) -L. -Wl,-rpath,\$$ORIGIN/.. -lisotopy
 
+GPU_DIR = gpu
+GPU_HEADER = $(GPU_DIR)/isotopy_gpu.cuh
+GPU_TEST_SRC = tests/isotopy_gpu.cpp
+GPU_TEST_OBJ = obj/isotopy_gpu.o
+GPU_TEST_BIN = $(TEST_DIR)/isotopy_gpu_test
+GPU_TSAN_OBJ = obj/isotopy_gpu_tsan.o
+GPU_TSAN_BIN = $(TEST_DIR)/isotopy_gpu_tsan
+GPU_CUDA_BIN = $(BIN_DIR)/isotopy_gpu_cuda
+NVCC ?= nvcc
+CUDA_ARCH ?= sm_75
+# MAX_DELTA sizes libisotopy's arrays; GPU_MAX_DELTA sizes the kernel's shared memory.
+# They are independent: the kernel caps at 9 because that is the largest degree whose
+# tree code fits one uint64 and whose region count fits a uint32 bitset.
+GPU_MAX_DELTA ?= 9
+GPU_DEFS = -DMAX_DELTA=$(MAX_DELTA) -DISOTOPY_GPU_MAX_DELTA=$(GPU_MAX_DELTA)
+# nvcc rejects host compilers newer than its ceiling (CUDA 11.1 caps at GCC 10),
+# so the cluster build points it at an older g++ than the one used for the library.
+# NVCC_EXTRA carries host-compiler escape hatches, e.g. -allow-unsupported-compiler
+# when the only g++ on the node is newer than the toolkit's supported ceiling.
+NVCC_CCBIN ?=
+NVCC_EXTRA ?=
+NVCCFLAGS = -arch=$(CUDA_ARCH) -std=c++17 -O3 -lineinfo -Iinclude -I$(GPU_DIR) $(GPU_DEFS) \
+            $(if $(NVCC_CCBIN),-ccbin $(NVCC_CCBIN),) $(NVCC_EXTRA)
+
+gpu_test: $(GPU_TEST_BIN) $(TEST_YAML)
+	./$(GPU_TEST_BIN)
+
+$(GPU_TEST_BIN): $(TARGET) $(GPU_TEST_OBJ) | $(TEST_DIR)
+	$(CXX) -pthread -o $@ $(GPU_TEST_OBJ) -L. $(RPATH_FLAG) -lisotopy
+
+$(GPU_TEST_OBJ): $(GPU_TEST_SRC) $(GPU_HEADER) | obj/
+	$(CXX) $(CXXFLAGS) -pthread -DISOTOPY_GPU_MAX_DELTA=$(GPU_MAX_DELTA) -I$(GPU_DIR) -c $< -o $@
+
+gpu_test_tsan: $(GPU_TSAN_BIN)
+	./$(GPU_TSAN_BIN) "[gpu][threaded]"
+
+$(GPU_TSAN_BIN): $(TARGET) $(GPU_TSAN_OBJ) | $(TEST_DIR)
+	$(CXX) -fsanitize=thread -pthread -g -o $@ $(GPU_TSAN_OBJ) -L. $(RPATH_FLAG) -lisotopy
+
+$(GPU_TSAN_OBJ): $(GPU_TEST_SRC) $(GPU_HEADER) | obj/
+	$(CXX) -std=c++20 -Wall -Wextra -O1 -g -fsanitize=thread -pthread -fPIC \
+	  -DISOTOPY_GPU_HOST_WARP $(GPU_DEFS) -Iinclude -I$(GPU_DIR) -c $< -o $@
+
+gpu_ptxas: $(GPU_DIR)/isotopy_gpu.cu $(GPU_HEADER) | obj/
+	$(NVCC) $(NVCCFLAGS) -Xptxas -v -c $< -o obj/isotopy_gpu_device.o
+
+GPU_STOP_AFTER ?= 6
+gpu_cuda: $(GPU_CUDA_BIN)
+
+# Stage-truncation builds for portable per-stage timing. Each produces a binary that
+# returns after stage k; differencing their throughputs gives the per-stage cost.
+gpu_stages: $(GPU_DIR)/isotopy_gpu.cu $(GPU_HEADER) $(TARGET) | $(BIN_DIR)
+	@for k in 1 2 3 4 5 6; do \
+	  echo "building stage-$$k binary"; \
+	  $(NVCC) $(NVCCFLAGS) -DISOTOPY_GPU_MAIN -DISOTOPY_GPU_STOP_AFTER=$$k \
+	    $(GPU_DIR)/isotopy_gpu.cu -o $(BIN_DIR)/isotopy_gpu_stage$$k \
+	    -L. -Xlinker -rpath -Xlinker '$$$$ORIGIN/..' -lisotopy || exit 1; \
+	done
+
+gpu_bench: $(GPU_CUDA_BIN)
+	./$(GPU_CUDA_BIN) bench 8 65536 1024 7
+
+$(GPU_CUDA_BIN): $(GPU_DIR)/isotopy_gpu.cu $(GPU_HEADER) $(TARGET) | $(BIN_DIR)
+	$(NVCC) $(NVCCFLAGS) -DISOTOPY_GPU_MAIN $(GPU_DIR)/isotopy_gpu.cu -o $@ \
+	  -L. -Xlinker -rpath -Xlinker '$$ORIGIN/..' -lisotopy
+
 docs:
 	doxygen Doxyfile
 
 clean:
 	rm -f $(OBJ) $(TARGET) $(TEST_OBJ) $(TEST_BIN) $(TEST_BATCH_OBJ) \
 	$(TEST_FULL_BIN) $(BENCHMARK_OBJ) $(BENCHMARK_BIN) $(PROFILING_OBJ) \
-	$(PROFILING_BIN) obj/*.o wasm_obj/*.o libisotopy_wasm.a $(TEST_YAML)
+	$(PROFILING_BIN) $(GPU_TEST_OBJ) $(GPU_TEST_BIN) $(GPU_TSAN_OBJ) $(GPU_TSAN_BIN) \
+	$(GPU_CUDA_BIN) $(BIN_DIR)/isotopy_gpu_stage* obj/isotopy_gpu_device.o obj/*.o wasm_obj/*.o libisotopy_wasm.a $(TEST_YAML)
 	rm -rf $(BIN_DIR)
 
  
@@ -100,7 +167,7 @@ debug_test: $(TEST_BIN)
 	./$(TEST_BIN)
 
 # Emscripten build
-.PHONY: emscripten docs
+.PHONY: emscripten docs gpu_test gpu_test_tsan gpu_ptxas gpu_cuda gpu_stages gpu_bench
 
 emscripten: clean emscripten_build
 
