@@ -60,14 +60,6 @@ Isotopy::Graph \- Represents an isotopy type as a graph and provides methods for
 .br
 .RI "Computes the connected components of the graph\&. "
 .ti -1c
-.RI "int \fBisotopy_root\fP ()"
-.br
-.RI "Computes the isotopy root of the graph\&. "
-.ti -1c
-.RI "void \fBcalculate_regions\fP ()"
-.br
-.RI "Calculates the regions of the graph based on component antipode adjacency\&. "
-.ti -1c
 .RI "void \fBisotopy_type\fP ()"
 .br
 .RI "Computes the full isotopy type of the graph\&. "
@@ -190,7 +182,7 @@ Isotopy::Graph \- Represents an isotopy type as a graph and provides methods for
 .ti -1c
 .RI "Adjacency \fBregion_adjacency\fP"
 .br
-.RI "region_adjacency[r] gives the set of regions adjacent to region r\&. "
+.RI "region_adjacency[r] gives the set of regions adjacent to region r\&. Sorted, duplicate-free, and self-loop-free; size() == region_count after \fBisotopy_type()\fP\&. "
 .ti -1c
 .RI "array< uint8_t, MAX_TOTAL_VERTS > \fBregion_sign\fP"
 .br
@@ -315,13 +307,6 @@ Constructs a graph from a sign vector and a set of triangles (backwards compatib
 
 .SH "Member Function Documentation"
 .PP 
-.SS "void Isotopy::Graph::calculate_regions ()"
-
-.PP
-Calculates the regions of the graph based on component antipode adjacency\&. Assigns each component to a region by traversing antipodal connections, grouping components that are connected via antipodes into the same region\&. Also builds the region adjacency structure and determines the root region\&.
-
-.PP
-This function must be called after the isotopy root has been computed\&. 
 .SS "void Isotopy::Graph::connected_components ()"
 
 .PP
@@ -390,25 +375,19 @@ True if the graph is an M-curve, false otherwise\&.
 .RE
 .PP
 
-.SS "int Isotopy::Graph::isotopy_root ()"
-
-.PP
-Computes the isotopy root of the graph\&. This is the core function of the library\&. It iteratively merges side points and their antipodes according to the isotopy rules, updating neighbor and component information until a root is found or a maximum number of iterations is reached\&.
-
-.PP
-The isotopy root is defined as the component containing a side point that is connected to its antipode, indicating that the isotopy process has merged all relevant regions\&.
-
-.PP
-\fBReturns\fP
-.RS 4
-The component index of the isotopy root if found, or -1 if no root is found after the maximum iterations\&. 
-.RE
-.PP
-
 .SS "void Isotopy::Graph::isotopy_type ()"
 
 .PP
-Computes the full isotopy type of the graph\&. This is the recommended entry point for users\&. It performs all necessary steps to analyze the graph's isotopy type, including computing connected components, finding the isotopy root, calculating regions, and assigning region signs\&. After calling this function, all relevant isotopy invariants and structures are available for further queries\&.
+Computes the full isotopy type of the graph\&. This is the recommended entry point for users, and the core of the library\&. It runs the whole pipeline: connected components, isotopy root detection, region calculation, and region sign assignment\&. After calling this function, all relevant isotopy invariants and structures are available for further queries\&.
+
+.PP
+The isotopy root is the component containing a side point connected to its antipode, indicating that the isotopy process has merged all relevant regions\&. It is detected by a bipartiteness check over the antipodal pairs for even degree, by an antipodal conflict for odd degree, and by a same-region adjacency edge as the odd-degree fallback\&.
+
+.PP
+Regions are then formed by union-find over antipodal connections, grouping components that are connected via antipodes into the same region; this also builds region_adjacency and determines root_region\&.
+
+.PP
+Calling this function repeatedly is cheap: it returns immediately once the isotopy type has been computed, until invalidated by \fBupdate_edge()\fP or \fBupdate_sign()\fP\&.
 
 .PP
 \fBExceptions\fP

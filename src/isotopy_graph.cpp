@@ -49,7 +49,11 @@ void Graph::initialize(const vector<bool>& sign_vector) {
   ntotalverts = num_total_vertices(delta);
   ntriangles  = num_triangles(delta);
 
-  // assert(sign_vector.size() == static_cast<size_t>(nverts) && "sign vector length does not match number of vertices");
+  if (sign_vector.size() != static_cast<size_t>(nverts)) {
+    throw std::invalid_argument("sign vector has " + std::to_string(sign_vector.size()) +
+                                " entries, expected " + std::to_string(nverts) +
+                                " for delta=" + std::to_string(delta));
+  }
   
   int q2_offset = nverts;
   int q3_offset = q2_offset + nverts - delta - 1;
@@ -120,9 +124,15 @@ void Graph::initialize(const vector<bool>& sign_vector) {
 }
 
 void Graph::process_triangles(const vector<Triangle>& triangles) {
-  // assert(triangles.size() == static_cast<size_t>(ntriangles) && "Triangulation must have delta^2 triangles");
+  if (triangles.size() != static_cast<size_t>(ntriangles)) {
+    throw std::invalid_argument("triangulation has " + std::to_string(triangles.size()) +
+                                " triangles, expected " + std::to_string(ntriangles) +
+                                " for delta=" + std::to_string(delta));
+  }
 
   for (const auto& [v0, v1, v2] : triangles) {
+    assert(v0 >= 0 && v0 < nverts && v1 >= 0 && v1 < nverts && v2 >= 0 && v2 < nverts &&
+           "triangle vertex index out of range");
     for (int q = 0; q < 4; ++q) {
       int qv0 = quad_idxs[v0][q];
       int qv1 = quad_idxs[v1][q];
@@ -165,6 +175,8 @@ Graph::Graph(int delta, const vector<bool>& sign_vector, const vector<Triangle>&
 
 void Graph::process_edges(const vector<Edge>& edges) {
   for (const auto& [v0, v1] : edges) {
+    assert(v0 >= 0 && v0 < nverts && v1 >= 0 && v1 < nverts &&
+           "edge vertex index out of range");
     for (int q = 0; q < 4; ++q) {
       int qv0 = quad_idxs[v0][q];
       int qv1 = quad_idxs[v1][q];
@@ -195,7 +207,9 @@ Graph::Graph(int delta, const vector<bool>& sign_vector, const set<set<int>>& tr
     vector<Triangle> tri_vec;
     tri_vec.reserve(triangles.size());
     for (const auto& tri_set : triangles) {
-      // assert(tri_set.size() == 3 && "Each triangle must have exactly 3 vertices");
+      if (tri_set.size() != 3) {
+        throw std::invalid_argument("Each triangle must have exactly 3 vertices.");
+      }
       vector<int> tri_tmp(tri_set.begin(), tri_set.end());
       tri_vec.push_back({tri_tmp[0], tri_tmp[1], tri_tmp[2]});
     }
@@ -316,6 +330,10 @@ void Graph::isotopy_type() {
   region_adjacency.clear();
   region_adjacency.resize(region_count);
 
+  // Two distinct components can share a region, so rcu == rcv is possible. Such an
+  // edge is not an adjacency between regions; recording it would put a self-loop in
+  // region_adjacency, which breaks the leaf test in viro_notation(). For odd degree
+  // it is instead the signal that identifies the isotopy root.
   if (!delta_even && root == -1) {
     // Odd degree with no root yet: find self-loop in region adjacency
     for (const auto& [u, v] : adjacency_edges) {
@@ -324,11 +342,11 @@ void Graph::isotopy_type() {
       if (cu != cv) {
         int rcu = region[cu];
         int rcv = region[cv];
-        region_adjacency[rcu].push_back(rcv);
-        region_adjacency[rcv].push_back(rcu);
-
         if (rcu == rcv) {
           root = cu;
+        } else {
+          region_adjacency[rcu].push_back(rcv);
+          region_adjacency[rcv].push_back(rcu);
         }
       }
     }
@@ -340,8 +358,10 @@ void Graph::isotopy_type() {
       if (cu != cv) {
         int rcu = region[cu];
         int rcv = region[cv];
-        region_adjacency[rcu].push_back(rcv);
-        region_adjacency[rcv].push_back(rcu);
+        if (rcu != rcv) {
+          region_adjacency[rcu].push_back(rcv);
+          region_adjacency[rcv].push_back(rcu);
+        }
       }
     }
   }
@@ -352,8 +372,18 @@ void Graph::isotopy_type() {
   }
 
   if (!delta_even) {
-    // Increment region count by 1 for the border region
+    // Increment region count by 1 for the border region, and give it an (empty)
+    // adjacency slot so that region_adjacency.size() == region_count always holds.
+    // The border region is unreachable from root_region, so the sign BFS below and
+    // the p_regions / n_regions tallies are unaffected; n_regions is seeded to 0
+    // for odd degree to account for it.
     region_count++;
+    region_adjacency.resize(region_count);
+  }
+
+  if (root == -1) {
+    throw std::runtime_error("no isotopy root found for delta=" + std::to_string(delta) +
+                             "; the patchwork is not a valid T-curve");
   }
 
   root_region = region[root];
@@ -424,7 +454,9 @@ string viro_notation(int root_region, const Adjacency& region_adjacency, bool un
         if (!visited[neighbor]) {
           bool is_leaf = true;
           for (const auto& nn : region_adjacency[neighbor]) {
-            if (!visited[nn] && nn != curr_region) {
+            // nn != neighbor: a caller-supplied adjacency may carry self-loops, which
+            // are not children and must not defeat the leaf test.
+            if (!visited[nn] && nn != curr_region && nn != neighbor) {
               is_leaf = false;
               break;
             }
@@ -479,13 +511,13 @@ string viro_notation(int root_region, const Adjacency& region_adjacency, bool un
   return dfs(root_region);
 }
 
-vector<pair<int,int>> get_region_tree(int root_region, const Adjacency& region_adjacency) {
-  vector<pair<int,int>> result;
+vector<RegionTreeNode> get_region_tree(int root_region, const Adjacency& region_adjacency) {
+  vector<RegionTreeNode> result;
   vector<bool> visited(region_adjacency.size(), false);
 
   function<void(int, int)> dfs = [&](int curr, int parent_idx) {
     int my_idx = (int)result.size();
-    result.push_back({parent_idx, 0});
+    result.push_back({curr, parent_idx, 0});
     visited[curr] = true;
 
     int leaf_count = 0;
@@ -494,12 +526,12 @@ vector<pair<int,int>> get_region_tree(int root_region, const Adjacency& region_a
       if (!visited[nb]) {
         bool is_leaf = true;
         for (int nn : region_adjacency[nb])
-          if (!visited[nn] && nn != curr) { is_leaf = false; break; }
+          if (!visited[nn] && nn != curr && nn != nb) { is_leaf = false; break; }
         if (is_leaf) { leaf_count++; visited[nb] = true; }
         else           non_leaf_children.push_back(nb);
       }
     }
-    result[my_idx].second = leaf_count;
+    result[my_idx].leaf_count = leaf_count;
     for (int child : non_leaf_children) dfs(child, my_idx);
   };
 

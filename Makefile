@@ -4,7 +4,7 @@ MAX_DELTA ?= 20
 # 2080Ti nodes, where we build on the run host) can be dropped for cross-host
 # builds that would otherwise SIGILL.  Build with `make ARCH=` to disable.
 ARCH ?= -march=native
-CXXFLAGS = -std=c++20 -Wall -Wextra -O3 -flto=auto $(ARCH) -Iinclude -fPIC -DMAX_DELTA=$(MAX_DELTA)
+CXXFLAGS = -std=c++20 -Wall -Wextra -O3 -flto=auto $(ARCH) -Iinclude -fPIC -DNDEBUG -DMAX_DELTA=$(MAX_DELTA)
 BIN_DIR = bin
 TEST_DIR = $(BIN_DIR)/tests
 BENCHMARK_DIR = $(BIN_DIR)/benchmarks
@@ -46,7 +46,7 @@ test: $(TEST_BIN)
 	./$(TEST_BIN)
 
 $(TEST_BIN): $(TARGET) $(TEST_OBJ) | $(TEST_DIR)
-	$(CXX) -o $@ $(TEST_OBJ) -L. $(RPATH_FLAG) -lisotopy
+	$(CXX) -o $@ $(TEST_OBJ) -L. $(RPATH_FLAG) -lisotopy $(LDFLAGS)
 
 
 TEST_BATCH_SRC = tests/isotopy_graph_batch.cpp
@@ -94,8 +94,9 @@ clean:
 	rm -rf $(BIN_DIR)
 
  
-debug_test: CXXFLAGS += -g -D_GLIBCXX_DEBUG -D_GLIBCXX_DEBUG_BACKTRACE
-debug_test: LDFLAGS = -g
+debug_test: CXXFLAGS += -g -UNDEBUG -D_GLIBCXX_DEBUG -D_GLIBCXX_DEBUG_BACKTRACE
+# _GLIBCXX_DEBUG_BACKTRACE needs libstdc++exp for __glibcxx_backtrace_full (GCC 14+).
+debug_test: LDFLAGS = -g -lstdc++exp
 debug_test: $(TEST_BIN)
 	./$(TEST_BIN)
 
@@ -104,8 +105,10 @@ debug_test: $(TEST_BIN)
 
 emscripten: clean emscripten_build
 
-emscripten_build: 
-	$(MAKE) OBJ="wasm_obj/isotopy_graph.o" TARGET=libisotopy_wasm.a CXX=em++ CXXFLAGS="$(CXXFLAGS)" libisotopy_wasm.a
+# ARCH= because -march=native is not a valid option for the wasm32 target.
+emscripten_build:
+	$(MAKE) OBJ="wasm_obj/isotopy_graph.o" TARGET=libisotopy_wasm.a CXX=em++ ARCH= \
+		CXXFLAGS="$(filter-out $(ARCH),$(CXXFLAGS))" libisotopy_wasm.a
 
 libisotopy_wasm.a: $(OBJ)
 	ar rcs $@ $(OBJ)

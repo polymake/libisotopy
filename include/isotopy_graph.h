@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <map>
 #include <set>
+#include <stdexcept>
 #include <string>
 #include <vector>
 #include <utility>
@@ -22,7 +23,26 @@ using Edge = pair<int, int>;
 using Adjacency = vector<vector<int>>;
 using QuadrantIndices = array<int, 4>;
 
-// Maximum supported degree for fixed-size array optimization
+/**
+ * @brief One node of the region tree returned by get_region_tree().
+ */
+struct RegionTreeNode {
+  int region;      ///< Index of the region this node stands for.
+  int parent;      ///< Index of the parent node within the returned vector; -1 for the root.
+  int leaf_count;  ///< Number of leaf regions collapsed into this node.
+};
+
+// Maximum supported degree for fixed-size array optimization.
+//
+// MAX_DELTA sizes the fixed std::array members of Graph, so it is part of the
+// ABI: a translation unit that overrides it will disagree with the compiled
+// library about sizeof(Graph) and about every member offset past polarisation.
+// Override it only by rebuilding the library with the same value
+// (`make MAX_DELTA=N`). The default matches the Makefile's.
+#ifndef MAX_DELTA
+#define MAX_DELTA 20
+#endif
+
 static constexpr int MAX_VERTS = (MAX_DELTA + 1) * (MAX_DELTA + 2) / 2;
 static constexpr int MAX_TOTAL_VERTS = 2 * MAX_DELTA * MAX_DELTA + 2 * MAX_DELTA + 1;
 
@@ -60,7 +80,7 @@ struct Graph {
   int root_region = -1; ///< Region index of the root component.
   int region_count = 0; ///< Total number of regions.
   array<int, MAX_TOTAL_VERTS> region; ///< region[c] gives the region index of component c. (initialized in isotopy_type())
-  Adjacency region_adjacency; ///< region_adjacency[r] gives the set of regions adjacent to region r.
+  Adjacency region_adjacency; ///< region_adjacency[r] gives the set of regions adjacent to region r. Sorted, duplicate-free, and self-loop-free; size() == region_count after isotopy_type().
   array<uint8_t, MAX_TOTAL_VERTS> region_sign; ///< region_sign[r] gives the sign of region r (initialized in isotopy_type(), 0=negative, 1=positive)
 
   int p_regions = 0; ///< Number of positive regions.
@@ -180,37 +200,24 @@ struct Graph {
   void connected_components();
 
   /**
-   * @brief Computes the isotopy root of the graph.
-   *
-   * This is the core function of the library. It iteratively merges side points and their antipodes
-   * according to the isotopy rules, updating neighbor and component information until a root is found
-   * or a maximum number of iterations is reached.
-   *
-   * The isotopy root is defined as the component containing a side point that is connected to its antipode,
-   * indicating that the isotopy process has merged all relevant regions.
-   *
-   * @return The component index of the isotopy root if found, or -1 if no root is found after the maximum iterations.
-   */
-  int isotopy_root();
-
-  /**
-   * @brief Calculates the regions of the graph based on component antipode adjacency.
-   *
-   * Assigns each component to a region by traversing antipodal connections, grouping components
-   * that are connected via antipodes into the same region. Also builds the region adjacency structure
-   * and determines the root region.
-   *
-   * This function must be called after the isotopy root has been computed.
-   */
-  void calculate_regions();
-
-  /**
    * @brief Computes the full isotopy type of the graph.
    *
-   * This is the recommended entry point for users. It performs all necessary steps to analyze the graph's
-   * isotopy type, including computing connected components, finding the isotopy root, calculating regions,
-   * and assigning region signs. After calling this function, all relevant isotopy invariants and structures
-   * are available for further queries.
+   * This is the recommended entry point for users, and the core of the library. It runs the
+   * whole pipeline: connected components, isotopy root detection, region calculation, and
+   * region sign assignment. After calling this function, all relevant isotopy invariants and
+   * structures are available for further queries.
+   *
+   * The isotopy root is the component containing a side point connected to its antipode,
+   * indicating that the isotopy process has merged all relevant regions. It is detected by a
+   * bipartiteness check over the antipodal pairs for even degree, by an antipodal conflict for
+   * odd degree, and by a same-region adjacency edge as the odd-degree fallback.
+   *
+   * Regions are then formed by union-find over antipodal connections, grouping components that
+   * are connected via antipodes into the same region; this also builds region_adjacency and
+   * determines root_region.
+   *
+   * Calling this function repeatedly is cheap: it returns immediately once the isotopy type has
+   * been computed, until invalidated by update_edge() or update_sign().
    *
    * @throws std::runtime_error if no isotopy root is found.
    */
@@ -352,9 +359,24 @@ private:
    */
 string viro_notation(int root_region, const Adjacency& region_adjacency, bool unicode = false);
 
-// Returns the region tree in DFS order as (parent_index, leaf_count) pairs.
-// Index 0 = root (parent = -1). Mirrors the DFS used in viro_notation().
-vector<pair<int,int>> get_region_tree(int root_region, const Adjacency& region_adjacency);
+/**
+ * @brief Returns the region tree in DFS preorder, mirroring the walk used by viro_notation().
+ *
+ * Entry 0 is the root, with parent -1; every other entry's parent is the index of an
+ * earlier entry. Each node carries the region it stands for, so the result can be mapped
+ * back onto region_adjacency.
+ *
+ * Leaf regions are collapsed: they do not get their own node, and are instead counted in
+ * their parent's leaf_count. The tree therefore has one node per non-leaf region. This is
+ * what Viro notation records, and is enough to reproduce the notation string.
+ *
+ * Self-loops in region_adjacency are ignored.
+ *
+ * @param root_region The region to start the walk from.
+ * @param region_adjacency The adjacency list of regions.
+ * @return The region tree in DFS preorder.
+ */
+vector<RegionTreeNode> get_region_tree(int root_region, const Adjacency& region_adjacency);
 
 /**
  * @brief Computes the number of vertices in a triangular grid of degree delta.

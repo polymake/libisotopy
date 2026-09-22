@@ -1,11 +1,18 @@
 # Build artifacts
 *.o
-*.so
 *.d
+*.so
+*.dylib
 *.a
 *.exe
+obj/
+wasm_obj/
 bin/
 debug
+
+# Stray binaries from ad-hoc compiles in the repo root
+/isotopy_graph
+/isotopy_graph_test
 
 # Editor/OS files
 *.swp

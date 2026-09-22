@@ -1,0 +1,34 @@
+.TH "Isotopy::RegionTreeNode" 3 "libisotopy" \" -*- nroff -*-
+.ad l
+.nh
+.SH NAME
+Isotopy::RegionTreeNode \- One node of the region tree returned by get_region_tree()\&.  
+
+.SH SYNOPSIS
+.br
+.PP
+.PP
+\fR#include <isotopy_graph\&.h>\fP
+.SS "Public Attributes"
+
+.in +1c
+.ti -1c
+.RI "int \fBregion\fP"
+.br
+.RI "Index of the region this node stands for\&. "
+.ti -1c
+.RI "int \fBparent\fP"
+.br
+.RI "Index of the parent node within the returned vector; -1 for the root\&. "
+.ti -1c
+.RI "int \fBleaf_count\fP"
+.br
+.RI "Number of leaf regions collapsed into this node\&. "
+.in -1c
+.SH "Detailed Description"
+.PP 
+One node of the region tree returned by get_region_tree()\&. 
+
+.SH "Author"
+.PP 
+Generated automatically by Doxygen for libisotopy from the source code\&.
