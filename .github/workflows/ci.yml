@@ -1,0 +1,228 @@
+# Mirror of .gitlab-ci.yml. The repo lives on two remotes -- GitLab at ZIB and
+# GitHub at polymake/libisotopy -- and both run the same gate. Keep the two
+# files in step: same container, same make targets, same regression threshold.
+#
+# No runner here has a GPU or nvcc. Real-device testing (ptxas register report,
+# compute-sanitizer race/sync/init, throughput, type resolution) runs on the
+# TU Berlin cluster, out of tree.
+
+name: CI
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+
+jobs:
+  test_isotopy_graph:
+    runs-on: ubuntu-latest
+    container: gcc:latest
+    timeout-minutes: 45
+    steps:
+      - name: Install build dependencies
+        run: apt-get update && apt-get install -y make g++ wget xz-utils
+      - uses: actions/checkout@v4
+      - run: make clean
+      - run: make
+      - run: make test_full
+
+  # Both GPU host suites on the CPU lane shim, diffed against libisotopy.
+  # GPU_MAX_DELTA 8 is what the cluster builds and every throughput number is
+  # measured against; 9 is the Makefile default and the kernel's cap.
+  gpu_host_tests:
+    runs-on: ubuntu-latest
+    container: gcc:latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        gpu_max_delta: [8, 9]
+    env:
+      ISOTOPY_REQUIRE_CORPUS: "1"
+    steps:
+      - name: Install build dependencies
+        run: apt-get update && apt-get install -y make g++ wget xz-utils
+      - uses: actions/checkout@v4
+      - run: make clean
+      - run: make
+      - run: make gpu_test GPU_MAX_DELTA=${{ matrix.gpu_max_delta }}
+
+  # Stages 1-5 of the pipeline, each truncated at its boundary. Nothing else
+  # builds a truncated host binary.
+  gpu_stage_test:
+    runs-on: ubuntu-latest
+    container: gcc:latest
+    timeout-minutes: 45
+    steps:
+      - name: Install build dependencies
+        run: apt-get update && apt-get install -y make g++
+      - uses: actions/checkout@v4
+      - run: make
+      - run: make gpu_stage_test
+
+  # The 32-lane warp-narrowing path under ThreadSanitizer. Runs only [threaded].
+  gpu_tsan:
+    runs-on: ubuntu-latest
+    container: gcc:latest
+    timeout-minutes: 45
+    steps:
+      - name: Install build dependencies
+        run: apt-get update && apt-get install -y make g++
+      - uses: actions/checkout@v4
+      - run: make
+      - run: make gpu_tsan
+
+  benchmark_isotopy_graph:
+    runs-on: ubuntu-latest
+    container: gcc:latest
+    needs: test_isotopy_graph
+    continue-on-error: true
+    timeout-minutes: 60
+    steps:
+      - name: Install build dependencies
+        run: apt-get update && apt-get install -y make g++ wget git xz-utils
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      # The container runs as root over a workspace owned by another uid, so
+      # every git call below fails with "dubious ownership" without this.
+      - name: Trust the workspace
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+      - name: Benchmark against the base revision
+        shell: bash
+        env:
+          GH_EVENT: ${{ github.event_name }}
+          GH_BASE_REF: ${{ github.base_ref }}
+          GH_DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          GH_REF_NAME: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          METRIC_KEYS=(triangles_dense edges_dense triangles_sparse edges_sparse pcom_parse pcom_write)
+          METRIC_LABELS=("Triangles dense" "Edges dense" "Triangles sparse" "Edges sparse" "PCOM parse" "PCOM write")
+
+          extract_metrics() {
+            awk '/^METRIC / {printf "%s=%s\n", $2, $3;}' "$1"
+          }
+
+          read_metrics() {
+            local target="$1"
+            local file="$2"
+            while IFS== read -r key value; do
+              [ -n "$key" ] && eval "$target[\"$key\"]=\"$value\""
+            done < <(extract_metrics "$file")
+          }
+
+          format_value() {
+            local value="${1:-}"
+            if [ -z "$value" ]; then
+              printf "-"
+            else
+              printf "%.0f" "$value"
+            fi
+          }
+
+          ratio() {
+            local num="${1:-}"
+            local den="${2:-}"
+            if [ -z "$num" ] || [ -z "$den" ]; then
+              printf "-"
+            else
+              awk -v a="$num" -v b="$den" 'BEGIN {if (b==0) {printf "-"} else {printf "%.2fx", a/b}}'
+            fi
+          }
+
+          print_table() {
+            local title="$1"
+            local curr_ref="$2"
+            local base_ref="$3"
+            local base_label="$4"
+            local extra_ref="${5:-}"
+            local extra_label="${6:-}"
+
+            declare -n curr_arr="$curr_ref"
+            declare -n base_arr="$base_ref"
+            local has_extra=0
+            if [ -n "$extra_ref" ]; then
+              declare -n extra_arr="$extra_ref"
+              has_extra=1
+            fi
+
+            echo "$title"
+            if [ "$has_extra" -eq 1 ]; then
+              printf "%-20s | %12s | %12s | %8s | %12s | %8s\n" "Metric" "Current/s" "$base_label/s" "Δ$base_label" "$extra_label/s" "Δ$extra_label"
+            else
+              printf "%-20s | %12s | %12s | %8s\n" "Metric" "Current/s" "$base_label/s" "Δ$base_label"
+            fi
+            printf "%s\n" "-------------------------------------------------------------------------------"
+            for idx in "${!METRIC_KEYS[@]}"; do
+              key="${METRIC_KEYS[$idx]}"
+              label="${METRIC_LABELS[$idx]}"
+              curr_val="${curr_arr[$key]:-}"
+              base_val="${base_arr[$key]:-}"
+              curr_fmt="$(format_value "$curr_val")"
+              base_fmt="$(format_value "$base_val")"
+              delta="$(ratio "$curr_val" "$base_val")"
+              if [ "$has_extra" -eq 1 ]; then
+                extra_val="${extra_arr[$key]:-}"
+                extra_fmt="$(format_value "$extra_val")"
+                extra_delta="$(ratio "$curr_val" "$extra_val")"
+                printf "%-20s | %12s | %12s | %8s | %12s | %8s\n" "$label" "$curr_fmt" "$base_fmt" "$delta" "$extra_fmt" "$extra_delta"
+              else
+                printf "%-20s | %12s | %12s | %8s\n" "$label" "$curr_fmt" "$base_fmt" "$delta"
+              fi
+            done
+            echo ""
+          }
+
+          if [ "$GH_EVENT" = "pull_request" ]; then
+            declare -A CURR BASE
+            make clean && make && make benchmark | tee curr.txt
+            read_metrics CURR curr.txt
+            git fetch origin "$GH_BASE_REF"
+            git reset --hard HEAD
+            git clean -fd
+            git checkout "origin/$GH_BASE_REF"
+            make clean && make && make benchmark | tee base.txt
+            read_metrics BASE base.txt
+            print_table "Current vs target (${GH_BASE_REF})" CURR BASE "Target"
+            FAIL=0
+            for key in "${METRIC_KEYS[@]}"; do
+              curr_val="${CURR[$key]}"
+              base_val="${BASE[$key]}"
+              if [ -n "$curr_val" ] && [ -n "$base_val" ]; then
+                if awk -v c="$curr_val" -v b="$base_val" 'BEGIN {exit !(c >= 0.9 * b)}'; then
+                  : # ok
+                else
+                  printf "✗ Metric %s regression: %s vs %s (%s)\n" "$key" "$curr_val" "$base_val" "$(ratio "$curr_val" "$base_val")"
+                  FAIL=1
+                fi
+              fi
+            done
+            [ "$FAIL" -eq 0 ] && { echo "✓ All benchmarks passed"; exit 0; } || exit 1
+          else
+            BRANCH=$GH_REF_NAME
+            declare -A CURR PREV MASTER
+            make clean && make && make benchmark | tee curr.txt
+            read_metrics CURR curr.txt
+            git fetch origin
+            git reset --hard HEAD
+            git clean -fd
+            git checkout HEAD^
+            make clean && make && make benchmark | tee prev.txt
+            read_metrics PREV prev.txt
+            print_table "Current vs previous commit" CURR PREV "Previous"
+
+            if [ "$BRANCH" != "$GH_DEFAULT_BRANCH" ]; then
+              git reset --hard HEAD
+              git clean -fd
+              git checkout "origin/$GH_DEFAULT_BRANCH"
+              make clean && make && make benchmark | tee master.txt
+              read_metrics MASTER master.txt
+              print_table "Current vs origin/$GH_DEFAULT_BRANCH" CURR MASTER "Default"
+            fi
+            exit 0
+          fi

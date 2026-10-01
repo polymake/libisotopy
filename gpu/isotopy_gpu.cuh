@@ -56,6 +56,10 @@ enum Flag : uint32_t {
   kAmbiguousRoot = 1u << 8,
 };
 
+inline constexpr uint16_t kTypeUnknown = 0xFFFFu;
+inline constexpr uint16_t kTypeFallback = 0xFFFEu;
+inline constexpr int kMaxTypeId = 0xFFFD;
+
 ISO_HD inline int popcount32(uint32_t x) {
 #ifdef __CUDA_ARCH__
   return __popc(x);
@@ -83,6 +87,7 @@ struct Result {
   int32_t components;
   int32_t rounds;
   uint32_t flags;
+  uint16_t type_id;
 };
 
 struct Tables {
@@ -454,6 +459,41 @@ ISO_HD bool breadth_first(Scratch& sh, Warp<LANES> w, int n_reg, int root) {
   return visited == full;
 }
 
+template <int LANES>
+ISO_HD uint16_t lookup_type(const uint64_t* keys, int nkeys, uint64_t code, Warp<LANES> w) {
+  if (nkeys <= 0) return kTypeUnknown;
+
+  int lo = 0;
+  if constexpr (LANES == 1) {
+    (void)w;
+    int count = nkeys;
+    while (count > 1) {
+      const int half = count / 2;
+      if (keys[lo + half] <= code) {
+        lo += half;
+        count -= half;
+      } else {
+        count = half;
+      }
+    }
+  } else {
+    int count = nkeys;
+    while (true) {
+      const int step = (count + LANES - 1) / LANES;
+      const int probe = lo + w.lane() * step;
+      const bool below = probe < lo + count && keys[probe] <= code;
+      const int taken = w.reduce_add(below ? 1 : 0);
+      if (taken == 0) return kTypeUnknown;
+      lo += (taken - 1) * step;
+      count -= (taken - 1) * step;
+      if (step == 1) break;
+      if (count > step) count = step;
+    }
+  }
+  if (keys[lo] != code) return kTypeUnknown;
+  return (uint16_t)lo;
+}
+
 ISO_HD inline bool code_less(uint64_t ca, uint8_t la, uint64_t cb, uint8_t lb) {
   if (la != lb) return la < lb;
   return ca < cb;
@@ -525,6 +565,7 @@ ISO_HD void classify_one(const Tables& t, const uint8_t* edges, const uint64_t* 
   out.components = 0;
   out.rounds = 0;
   out.flags = kOk;
+  out.type_id = kTypeFallback;
 
   if (t.delta < 1 || t.delta > kMaxDelta) {
     out.flags |= kDeltaOutOfRange;

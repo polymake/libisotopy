@@ -14,3 +14,8 @@ debug
 
 # Test data (decompressed from .xz)
 tests/isotopy_tests.yaml
+
+# cluster stuff
+hpc/
+
+*.md

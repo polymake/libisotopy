@@ -12,6 +12,7 @@
 #include "isotopy_gpu.cuh"
 #include "isotopy_graph.h"
 #include "node.hpp"
+#include "test_env.h"
 
 namespace {
 
@@ -131,6 +132,30 @@ TEST_CASE("compile-time widths stay inside the types that carry them", "[gpu][li
   REQUIRE(2 * (worst_regions - 1) < IsotopyGPU::kCodeBits);
 }
 
+TEST_CASE("a degree outside the build's range flags instead of running", "[gpu][limits]") {
+  const IsotopyGPU::Tables& good = tables_for(6);
+  const std::vector<Case> cases = random_cases(6, 1, 1);
+  REQUIRE(!cases.empty());
+  const Packed packed = pack_instance(good, cases[0].signs, cases[0].edges);
+
+  for (const int bad_delta : {0, -1, IsotopyGPU::kMaxDelta + 1}) {
+    IsotopyGPU::Tables t = good;
+    t.delta = bad_delta;
+
+    const IsotopyGPU::Result got =
+        IsotopyGPU::classify_host(t, packed.edges.data(), packed.signs.data());
+
+    INFO("delta " << bad_delta);
+    CHECK((got.flags & IsotopyGPU::kDeltaOutOfRange) != 0u);
+    CHECK(got.code == 0ull);
+    CHECK(got.p == 0);
+    CHECK(got.n == 0);
+    CHECK(got.regions == 0);
+    CHECK(got.components == 0);
+    CHECK(got.type_id == IsotopyGPU::kTypeFallback);
+  }
+}
+
 TEST_CASE("the tree code is invariant under region relabeling", "[gpu][relabel]") {
   const std::vector<std::vector<std::vector<int>>> trees = {
       {{}},
@@ -165,7 +190,7 @@ TEST_CASE("the tree code is invariant under region relabeling", "[gpu][relabel]"
 }
 
 TEST_CASE("classify_host is reentrant across threads", "[gpu][reentrant]") {
-  for (int delta = 5; delta <= 8; ++delta) {
+  for (int delta = 5; delta <= IsotopyGPU::kMaxDelta; ++delta) {
     const IsotopyGPU::Tables& t = tables_for(delta);
     const std::vector<Case> cases = random_cases(delta, 8, 8);
     REQUIRE(!cases.empty());
@@ -223,7 +248,7 @@ TEST_CASE("squeezed limits flag instead of answering wrongly", "[gpu][fallback]"
     int wrong = 0;
     int total = 0;
 
-    for (int delta = 6; delta <= 8; ++delta) {
+    for (int delta = 6; delta <= IsotopyGPU::kMaxDelta; ++delta) {
       IsotopyGPU::Tables t = IsotopyGPU::build_tables(delta);
       t.max_rounds = sq.max_rounds;
       t.max_regions = sq.max_regions;
@@ -302,7 +327,9 @@ TEST_CASE("antipodal map flips the sign by (-1)^delta", "[gpu][tables]") {
 TEST_CASE("GPU pipeline matches libisotopy on the YAML corpus", "[gpu][corpus]") {
   std::ifstream ifs("tests/isotopy_tests.yaml");
   if (!ifs.is_open()) {
-    WARN("Could not open tests/isotopy_tests.yaml. Skipping corpus comparison.");
+    ISOTOPY_SKIP_UNLESS_REQUIRED("ISOTOPY_REQUIRE_CORPUS",
+                                 "Could not open tests/isotopy_tests.yaml. "
+                                 "Skipping corpus comparison.");
     return;
   }
   const std::string yaml((std::istreambuf_iterator<char>(ifs)), std::istreambuf_iterator<char>());
@@ -343,9 +370,42 @@ TEST_CASE("GPU pipeline matches libisotopy on the YAML corpus", "[gpu][corpus]")
   CHECK(checked > 0);
 }
 
+#if ISOTOPY_GPU_STOP_AFTER < 6
+TEST_CASE("a truncated pipeline runs to completion and is deterministic", "[gpu][stages]") {
+  // The stage digests are anti-dead-code devices for per-stage timing, not
+  // checksums: stages 1, 3, 4 and 5 either seed a per-lane constant or reduce_or
+  // a per-lane XOR, so their value depends on the lane count. Only termination,
+  // reproducibility and the flag set are meaningful here.
+  const uint32_t reachable = IsotopyGPU::kNoConverge | IsotopyGPU::kLabelsInconsistent |
+                             IsotopyGPU::kComponentCountMismatch | IsotopyGPU::kNoRoot |
+                             IsotopyGPU::kTooManyRegions | IsotopyGPU::kBfsIncomplete |
+                             IsotopyGPU::kAmbiguousRoot | IsotopyGPU::kDeltaOutOfRange;
+
+  int checked = 0;
+  for (int delta = 4; delta <= IsotopyGPU::kMaxDelta; ++delta) {
+    const IsotopyGPU::Tables& t = tables_for(delta);
+    for (const Case& c : random_cases(delta, 4, 4)) {
+      const Packed packed = pack_instance(t, c.signs, c.edges);
+      const IsotopyGPU::Result a =
+          IsotopyGPU::classify_host(t, packed.edges.data(), packed.signs.data());
+      const IsotopyGPU::Result b =
+          IsotopyGPU::classify_host(t, packed.edges.data(), packed.signs.data());
+
+      INFO("degree " << delta << " stage " << ISOTOPY_GPU_STOP_AFTER);
+      REQUIRE(a.code == b.code);
+      REQUIRE(a.flags == b.flags);
+      REQUIRE((a.flags & ~reachable) == 0u);
+      ++checked;
+    }
+  }
+  WARN("stage " << ISOTOPY_GPU_STOP_AFTER << ": " << checked << " instances");
+  CHECK(checked > 0);
+}
+#endif
+
 #ifdef ISOTOPY_GPU_HOST_WARP
 TEST_CASE("32 host lanes agree with the serial lane", "[gpu][threaded]") {
-  for (int delta = 4; delta <= 8; ++delta) {
+  for (int delta = 4; delta <= IsotopyGPU::kMaxDelta; ++delta) {
     const IsotopyGPU::Tables& t = tables_for(delta);
     const int nverts = Isotopy::num_vertices(delta);
 

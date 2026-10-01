@@ -3,6 +3,10 @@
 
 #include "isotopy_gpu.cuh"
 
+#ifndef __CUDA_ARCH__
+#include "isotopy_batch.h"
+#endif
+
 namespace IsotopyGPU {
 
 inline constexpr int kWarpsPerBlock = 8;
@@ -17,7 +21,8 @@ static_assert(sizeof(Scratch) * kWarpsPerBlock + sizeof(Tables) <= 48 * 1024,
 __constant__ Tables g_tables;
 
 __global__ void classify_kernel(const uint8_t* edges, const uint64_t* signs, Result* out,
-                                int batch, int edge_stride, int sign_stride) {
+                                int batch, int edge_stride, int sign_stride, const uint64_t* keys,
+                                int nkeys) {
   __shared__ Tables tables;
   __shared__ Scratch scratch[kWarpsPerBlock];
 
@@ -36,6 +41,13 @@ __global__ void classify_kernel(const uint8_t* edges, const uint64_t* signs, Res
   classify_one(tables, edges + (size_t)instance * edge_stride,
                signs + (size_t)instance * sign_stride, scratch[slot], Warp<32>{}, r);
 
+#ifdef ISOTOPY_GPU_DEVICE_TABLE
+  if (r.flags == kOk && nkeys > 0) r.type_id = lookup_type(keys, nkeys, r.code, Warp<32>{});
+#else
+  (void)keys;
+  (void)nkeys;
+#endif
+
   if ((threadIdx.x & 31) == 0) out[instance] = r;
 }
 
@@ -53,12 +65,15 @@ struct DeviceBatch {
   uint8_t* edges = nullptr;
   uint64_t* signs = nullptr;
   Result* out = nullptr;
+  uint64_t* keys = nullptr;
+  int nkeys = 0;
   int capacity = 0;
   int edge_stride = 0;
   int sign_stride = 0;
 };
 
-void device_batch_alloc(DeviceBatch& d, const Tables& t, int capacity) {
+void device_batch_alloc(DeviceBatch& d, const Tables& t, int capacity, const uint64_t* keys,
+                        int nkeys) {
   d.capacity = capacity;
   d.edge_stride = 2 * t.nedges;
   d.sign_stride = kQ1Words;
@@ -66,12 +81,23 @@ void device_batch_alloc(DeviceBatch& d, const Tables& t, int capacity) {
   ISO_CUDA_CHECK(cudaMalloc(&d.edges, (size_t)capacity * d.edge_stride * sizeof(uint8_t)));
   ISO_CUDA_CHECK(cudaMalloc(&d.signs, (size_t)capacity * d.sign_stride * sizeof(uint64_t)));
   ISO_CUDA_CHECK(cudaMalloc(&d.out, (size_t)capacity * sizeof(Result)));
+  if (keys != nullptr && nkeys > 0) {
+    d.nkeys = nkeys;
+    ISO_CUDA_CHECK(cudaMalloc(&d.keys, (size_t)nkeys * sizeof(uint64_t)));
+    ISO_CUDA_CHECK(
+        cudaMemcpy(d.keys, keys, (size_t)nkeys * sizeof(uint64_t), cudaMemcpyHostToDevice));
+  }
+}
+
+void device_batch_alloc(DeviceBatch& d, const Tables& t, int capacity) {
+  device_batch_alloc(d, t, capacity, nullptr, 0);
 }
 
 void device_batch_free(DeviceBatch& d) {
   ISO_CUDA_CHECK(cudaFree(d.edges));
   ISO_CUDA_CHECK(cudaFree(d.signs));
   ISO_CUDA_CHECK(cudaFree(d.out));
+  if (d.keys != nullptr) ISO_CUDA_CHECK(cudaFree(d.keys));
   d = DeviceBatch{};
 }
 
@@ -85,7 +111,7 @@ void device_batch_upload(DeviceBatch& d, const uint8_t* edges, const uint64_t* s
 void device_batch_launch(DeviceBatch& d, int batch) {
   const int blocks = (batch + kWarpsPerBlock - 1) / kWarpsPerBlock;
   classify_kernel<<<blocks, kThreadsPerBlock>>>(d.edges, d.signs, d.out, batch, d.edge_stride,
-                                                d.sign_stride);
+                                                d.sign_stride, d.keys, d.nkeys);
   ISO_CUDA_CHECK(cudaGetLastError());
   ISO_CUDA_CHECK(cudaDeviceSynchronize());
 }
@@ -93,6 +119,20 @@ void device_batch_launch(DeviceBatch& d, int batch) {
 void device_batch_download(DeviceBatch& d, Result* out, int batch) {
   ISO_CUDA_CHECK(cudaMemcpy(out, d.out, (size_t)batch * sizeof(Result), cudaMemcpyDeviceToHost));
 }
+
+#ifndef __CUDA_ARCH__
+void classify_batch(const Tables& t, const TypeTable& table, const uint8_t* edges,
+                    const uint64_t* signs, int batch, BatchOutput* out, int unknown_max) {
+  DeviceBatch d;
+  device_batch_alloc(d, t, batch, table.keys.data(), (int)table.keys.size());
+  device_batch_upload(d, edges, signs, batch);
+  device_batch_launch(d, batch);
+  out->results.assign(batch, Result{});
+  device_batch_download(d, out->results.data(), batch);
+  device_batch_free(d);
+  resolve_batch(t, table, edges, signs, batch, out, unknown_max);
+}
+#endif
 
 void classify_batch_device(const Tables& t, const uint8_t* edges, const uint64_t* signs,
                            Result* out, int batch) {
@@ -112,6 +152,8 @@ void classify_batch_device(const Tables& t, const uint8_t* edges, const uint64_t
 #include <algorithm>
 #include <chrono>
 #include <cstring>
+#include <map>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -182,6 +224,38 @@ Batch make_batch(const IsotopyGPU::Tables& t, const std::vector<Triangulation>& 
     }
   }
   return b;
+}
+
+IsotopyGPU::TypeTable table_for(int delta, const std::vector<Triangulation>& pool, const Batch& b,
+                                const std::string& yaml_path, std::string* source) {
+#ifdef ISOTOPY_HAVE_FKYAML
+  if (!yaml_path.empty()) {
+    *source = yaml_path;
+    return IsotopyGPU::load_type_table(yaml_path, delta);
+  }
+#else
+  if (!yaml_path.empty()) {
+    std::fprintf(stderr, "this binary was built without ISOTOPY_HAVE_FKYAML; ignoring %s\n",
+                 yaml_path.c_str());
+  }
+#endif
+  *source = "libisotopy over this batch";
+  std::set<std::string> distinct;
+  for (size_t i = 0; i < b.sign_vectors.size(); ++i) {
+    Isotopy::Graph g(delta, b.sign_vectors[i], pool[b.pool_index[i]].triangles);
+    g.isotopy_type();
+    distinct.insert(g.viro_notation());
+  }
+  std::vector<IsotopyGPU::TypeEntry> raw;
+  for (const std::string& v : distinct) {
+    IsotopyGPU::TypeEntry e;
+    e.viro = v;
+    const IsotopyGPU::Viro::Parsed parsed = IsotopyGPU::Viro::parse(v);
+    IsotopyGPU::Viro::region_pn(parsed.tree, parsed.has_j, &e.p, &e.n);
+    e.num_ovals = IsotopyGPU::Viro::num_ovals(parsed.tree, parsed.has_j);
+    raw.push_back(e);
+  }
+  return IsotopyGPU::build_type_table(delta, raw);
 }
 
 struct Stats {
@@ -263,6 +337,7 @@ int main(int argc, char** argv) {
   const int count = argc > 3 ? std::atoi(argv[3]) : 65536;
   const int pool_size = argc > 4 ? std::atoi(argv[4]) : 1024;
   const int reps = argc > 5 ? std::atoi(argv[5]) : 7;
+  const std::string yaml = argc > 6 ? argv[6] : "";
 
   if (delta < 1 || delta > IsotopyGPU::kMaxDelta) {
     std::fprintf(stderr,
@@ -272,6 +347,48 @@ int main(int argc, char** argv) {
     return 2;
   }
   const IsotopyGPU::Tables t = IsotopyGPU::build_tables(delta);
+
+  if (mode == "types") {
+    const std::vector<Triangulation> pool = make_pool(delta, pool_size, 4242u);
+    const Batch b = make_batch(t, pool, count, 12345u);
+
+    std::string source;
+    const IsotopyGPU::TypeTable table = table_for(delta, pool, b, yaml, &source);
+    std::printf("delta %d  batch %d  pool %zu\n", delta, count, pool.size());
+    std::printf("  table       %zu types from %s (fingerprint %016llx, %zu unparsed)\n",
+                table.entries.size(), source.c_str(),
+                (unsigned long long)table.fingerprint, table.rejected.size());
+
+    IsotopyGPU::BatchOutput out;
+    IsotopyGPU::classify_batch(t, table, b.edges.data(), b.signs.data(), count, &out);
+
+    std::map<uint16_t, int> histogram;
+    for (uint16_t id : out.type_id) ++histogram[id];
+    std::printf("  resolved    %zu distinct ids over %d instances\n", histogram.size(), count);
+    std::printf("  flagged     %d  recomputed %d  recompute_failed %d\n", out.flagged,
+                out.recomputed, out.recompute_failed);
+    std::printf("  unknown     %d instances, %zu distinct codes, overflow %d\n", out.unknown,
+                out.unknown_codes.size(), (int)out.unknown_overflow);
+    std::printf("  device ids  %d disagreements with the host search\n", out.device_disagreements);
+
+    std::vector<std::pair<int, uint16_t>> ranked;
+    for (const auto& kv : histogram) ranked.push_back(std::make_pair(kv.second, kv.first));
+    std::sort(ranked.rbegin(), ranked.rend());
+    for (size_t k = 0; k < ranked.size() && k < 8; ++k) {
+      const IsotopyGPU::TypeEntry* e = table.entry(ranked[k].second);
+      std::printf("    %7d x id %5u  %s\n", ranked[k].first, (unsigned)ranked[k].second,
+                  e == nullptr ? "<unresolved>" : e->viro.c_str());
+    }
+    for (size_t k = 0; k < out.unknown_codes.size() && k < 8; ++k) {
+      std::printf("    unknown code %020llu  witness instance %d\n",
+                  (unsigned long long)out.unknown_codes[k], out.unknown_witness[k]);
+    }
+
+    std::printf("METRIC gpu_types_delta%d_unknown %d\n", delta, out.unknown);
+    std::printf("METRIC gpu_types_delta%d_flagged %d\n", delta, out.flagged);
+    std::printf("METRIC gpu_types_delta%d_distinct %zu\n", delta, histogram.size());
+    return (out.recompute_failed == 0 && out.device_disagreements == 0) ? 0 : 1;
+  }
 
   if (mode == "sweep") {
     const std::vector<Triangulation> pool = make_pool(delta, pool_size, 4242u);
