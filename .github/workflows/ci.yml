@@ -30,17 +30,16 @@ jobs:
       - run: make
       - run: make test_full
 
-  # Both GPU host suites on the CPU lane shim, diffed against libisotopy.
-  # GPU_MAX_DELTA 8 is what the cluster builds and every throughput number is
-  # measured against; 9 is the Makefile default and the kernel's cap.
-  gpu_host_tests:
+  # Every GPU host test on the CPU lane shim, diffed against libisotopy: the
+  # plain binary, stages 1-5 truncated at their boundary, and the 32-lane
+  # warp-narrowing path under ThreadSanitizer. GPU_MAX_DELTA 8 is what the
+  # cluster builds and every throughput number is measured against; 9 is the
+  # Makefile default and the kernel's cap. The clean between them is required
+  # because the binaries do not depend on GPU_MAX_DELTA.
+  gpu_test:
     runs-on: ubuntu-latest
     container: gcc:latest
     timeout-minutes: 45
-    strategy:
-      fail-fast: false
-      matrix:
-        gpu_max_delta: [8, 9]
     env:
       ISOTOPY_REQUIRE_CORPUS: "1"
     steps:
@@ -49,32 +48,10 @@ jobs:
       - uses: actions/checkout@v4
       - run: make clean
       - run: make
-      - run: make gpu_test GPU_MAX_DELTA=${{ matrix.gpu_max_delta }}
-
-  # Stages 1-5 of the pipeline, each truncated at its boundary. Nothing else
-  # builds a truncated host binary.
-  gpu_stage_test:
-    runs-on: ubuntu-latest
-    container: gcc:latest
-    timeout-minutes: 45
-    steps:
-      - name: Install build dependencies
-        run: apt-get update && apt-get install -y make g++
-      - uses: actions/checkout@v4
+      - run: make gpu_test GPU_MAX_DELTA=8
+      - run: make clean
       - run: make
-      - run: make gpu_stage_test
-
-  # The 32-lane warp-narrowing path under ThreadSanitizer. Runs only [threaded].
-  gpu_tsan:
-    runs-on: ubuntu-latest
-    container: gcc:latest
-    timeout-minutes: 45
-    steps:
-      - name: Install build dependencies
-        run: apt-get update && apt-get install -y make g++
-      - uses: actions/checkout@v4
-      - run: make
-      - run: make gpu_tsan
+      - run: make gpu_test GPU_MAX_DELTA=9
 
   benchmark_isotopy_graph:
     runs-on: ubuntu-latest

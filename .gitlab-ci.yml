@@ -15,41 +15,25 @@ test_isotopy_graph:
     - make
     - make test_full
 
-# Both GPU host suites on the CPU lane shim, diffed against libisotopy.
-# GPU_MAX_DELTA 8 is what the cluster builds and every throughput number is
-# measured against; 9 is the Makefile default and the kernel's cap.
-gpu_host_tests:
+# Every GPU host test on the CPU lane shim, diffed against libisotopy: the
+# plain binary, stages 1-5 truncated at their boundary, and the 32-lane
+# warp-narrowing path under ThreadSanitizer. GPU_MAX_DELTA 8 is what the cluster
+# builds and every throughput number is measured against; 9 is the Makefile
+# default and the kernel's cap. The clean between them is required because the
+# binaries do not depend on GPU_MAX_DELTA.
+gpu_test:
   stage: test
   <<: *gcc_image
   needs: []
-  parallel:
-    matrix:
-      - GPU_MAX_DELTA: ["8", "9"]
   variables:
     ISOTOPY_REQUIRE_CORPUS: "1"
   script:
     - make clean
     - make
-    - make gpu_test GPU_MAX_DELTA=$GPU_MAX_DELTA
-
-# Stages 1-5 of the pipeline, each truncated at its boundary. Nothing else
-# builds a truncated host binary.
-gpu_stage_test:
-  stage: test
-  <<: *gcc_image
-  needs: []
-  script:
+    - make gpu_test GPU_MAX_DELTA=8
+    - make clean
     - make
-    - make gpu_stage_test
-
-# The 32-lane warp-narrowing path under ThreadSanitizer. Runs only [threaded].
-gpu_tsan:
-  stage: test
-  <<: *gcc_image
-  needs: []
-  script:
-    - make
-    - make gpu_tsan
+    - make gpu_test GPU_MAX_DELTA=9
 
 benchmark_isotopy_graph:
   stage: benchmark

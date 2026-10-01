@@ -1,5 +1,7 @@
 # libisotopy
 
+[![CI](https://github.com/polymake/libisotopy/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/polymake/libisotopy/actions/workflows/ci.yml)
+
 A C++ shared library that computes the **real scheme** (ambient isotopy type in
 $\mathbb{RP}^2$) of a **T-curve** given by Viro's combinatorial patchworking: a
 unimodular triangulation of $d\cdot\Delta_2$ together with a sign distribution
