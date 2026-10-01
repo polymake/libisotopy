@@ -2,17 +2,54 @@ stages:
   - test
   - benchmark
 
-test_isotopy_graph:
-  stage: test
+.gcc_image: &gcc_image
   image: gcc:latest
   before_script:
-    - apt-get update && apt-get install -y make g++ wget xz-utils git-lfs
-    - git lfs install
-    - git lfs pull
+    - apt-get update && apt-get install -y make g++ wget xz-utils
+
+test_isotopy_graph:
+  stage: test
+  <<: *gcc_image
   script:
     - make clean
     - make
     - make test_full
+
+# Both GPU host suites on the CPU lane shim, diffed against libisotopy.
+# GPU_MAX_DELTA 8 is what the cluster builds and every throughput number is
+# measured against; 9 is the Makefile default and the kernel's cap.
+gpu_host_tests:
+  stage: test
+  <<: *gcc_image
+  needs: []
+  parallel:
+    matrix:
+      - GPU_MAX_DELTA: ["8", "9"]
+  variables:
+    ISOTOPY_REQUIRE_CORPUS: "1"
+  script:
+    - make clean
+    - make
+    - make gpu_test GPU_MAX_DELTA=$GPU_MAX_DELTA
+
+# Stages 1-5 of the pipeline, each truncated at its boundary. Nothing else
+# builds a truncated host binary.
+gpu_stage_test:
+  stage: test
+  <<: *gcc_image
+  needs: []
+  script:
+    - make
+    - make gpu_stage_test
+
+# The 32-lane warp-narrowing path under ThreadSanitizer. Runs only [threaded].
+gpu_tsan:
+  stage: test
+  <<: *gcc_image
+  needs: []
+  script:
+    - make
+    - make gpu_tsan
 
 benchmark_isotopy_graph:
   stage: benchmark
@@ -21,8 +58,7 @@ benchmark_isotopy_graph:
     - job: test_isotopy_graph
       artifacts: false
   before_script:
-    - apt-get update && apt-get install -y make g++ wget git xz-utils git-lfs
-    - git lfs install
+    - apt-get update && apt-get install -y make g++ wget git xz-utils
   allow_failure: true
   script:
     - |
