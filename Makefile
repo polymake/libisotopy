@@ -4,7 +4,7 @@ MAX_DELTA ?= 20
 # 2080Ti nodes, where we build on the run host) can be dropped for cross-host
 # builds that would otherwise SIGILL.  Build with `make ARCH=` to disable.
 ARCH ?= -march=native
-CXXFLAGS = -std=c++20 -Wall -Wextra -O3 -flto=auto $(ARCH) -Iinclude -fPIC -DMAX_DELTA=$(MAX_DELTA)
+CXXFLAGS = -std=c++20 -Wall -Wextra -O3 -flto=auto $(ARCH) -Iinclude -fPIC -DNDEBUG -DMAX_DELTA=$(MAX_DELTA)
 BIN_DIR = bin
 TEST_DIR = $(BIN_DIR)/tests
 BENCHMARK_DIR = $(BIN_DIR)/benchmarks
@@ -46,7 +46,7 @@ test: $(TEST_BIN)
 	./$(TEST_BIN)
 
 $(TEST_BIN): $(TARGET) $(TEST_OBJ) | $(TEST_DIR)
-	$(CXX) -o $@ $(TEST_OBJ) -L. $(RPATH_FLAG) -lisotopy
+	$(CXX) -o $@ $(TEST_OBJ) -L. $(RPATH_FLAG) -lisotopy $(LDFLAGS)
 
 
 TEST_BATCH_SRC = tests/isotopy_graph_batch.cpp
@@ -84,28 +84,111 @@ profiling: $(PROFILING_BIN) $(TEST_YAML)
 $(PROFILING_BIN): $(TARGET) $(PROFILING_OBJ) | $(BIN_DIR)
 	$(CXX) -o $@ $(PROFILING_OBJ) -L. -Wl,-rpath,\$$ORIGIN/.. -lisotopy
 
+GPU_DIR = gpu
+GPU_HEADER = $(GPU_DIR)/isotopy_gpu.cuh
+GPU_HEADERS = $(GPU_HEADER) $(GPU_DIR)/isotopy_viro.h $(GPU_DIR)/isotopy_types.h \
+              $(GPU_DIR)/isotopy_batch.h tests/test_env.h
+GPU_TEST_SRC = tests/isotopy_gpu.cpp
+GPU_TEST_BIN = $(TEST_DIR)/isotopy_gpu_test
+GPU_TSAN_BIN = $(TEST_DIR)/isotopy_gpu_tsan
+NVCC ?= nvcc
+CUDA_ARCH ?= sm_75
+# MAX_DELTA sizes libisotopy's arrays; GPU_MAX_DELTA sizes the kernel's shared memory.
+# They are independent: the kernel caps at 9 because that is the largest degree whose
+# tree code fits one uint64 and whose region count fits a uint32 bitset.
+GPU_MAX_DELTA ?= 9
+GPU_DEFS = -DMAX_DELTA=$(MAX_DELTA) -DISOTOPY_GPU_MAX_DELTA=$(GPU_MAX_DELTA)
+GPU_INC = -Iinclude -I$(GPU_DIR) -Itests
+# nvcc rejects host compilers newer than its ceiling (CUDA 11.1 caps at GCC 10),
+# so the cluster build points it at an older g++ than the one used for the library.
+# NVCC_EXTRA carries host-compiler escape hatches, e.g. -allow-unsupported-compiler
+# when the only g++ on the node is newer than the toolkit's supported ceiling.
+NVCC_CCBIN ?=
+NVCC_EXTRA ?=
+GPU_DEVICE_TABLE ?= 0
+ifeq ($(GPU_DEVICE_TABLE),1)
+GPU_DEFS += -DISOTOPY_GPU_DEVICE_TABLE
+endif
+GPU_FKYAML ?= 0
+ifeq ($(GPU_FKYAML),1)
+GPU_DEFS += -DISOTOPY_HAVE_FKYAML
+endif
+ifeq ($(origin GPU_STOP_AFTER),command line)
+GPU_CUDA_BIN = $(BIN_DIR)/isotopy_gpu_stage$(GPU_STOP_AFTER)
+GPU_DEFS += -DISOTOPY_GPU_STOP_AFTER=$(GPU_STOP_AFTER)
+else
+GPU_CUDA_BIN = $(BIN_DIR)/isotopy_gpu_cuda
+endif
+NVCCFLAGS = -arch=$(CUDA_ARCH) -std=c++17 -O3 -lineinfo $(GPU_INC) $(GPU_DEFS) \
+            $(if $(NVCC_CCBIN),-ccbin $(NVCC_CCBIN),) $(NVCC_EXTRA)
+
+# GPU_STOP_AFTER only ever reached nvcc on the cluster, so no host binary has
+# ever contained a truncated pipeline -- a stage boundary that reads scratch the
+# earlier stages never wrote would only surface as a bad per-stage timing run.
+# The digests are lane-count dependent, so [stages] asserts termination,
+# reproducibility and the flag set, not a value.
+GPU_STAGES ?= 1 2 3 4 5
+GPU_STAGE_BINS = $(addprefix $(TEST_DIR)/isotopy_gpu_stage,$(GPU_STAGES))
+GPU_HOST_FLAGS = -pthread -DISOTOPY_HAVE_FKYAML $(GPU_INC)
+GPU_HOST_LINK = -L. $(RPATH_FLAG) -lisotopy
+
+# One source, seven binaries: stage truncation and the 32-lane host warp are
+# compile-time switches, so [stages] and [threaded] each need their own build.
+gpu_test: $(GPU_TEST_BIN) $(GPU_STAGE_BINS) $(GPU_TSAN_BIN) $(TEST_YAML)
+	@echo "== $(GPU_TEST_BIN)"
+	@./$(GPU_TEST_BIN)
+	@for t in $(GPU_STAGE_BINS); do echo "== $$t"; ./$$t "[stages]" || exit 1; done
+	@echo "== $(GPU_TSAN_BIN)"
+	@./$(GPU_TSAN_BIN) "[threaded]"
+
+$(GPU_TEST_BIN): $(GPU_TEST_SRC) $(GPU_HEADERS) $(TARGET) | $(TEST_DIR)
+	$(CXX) $(CXXFLAGS) $(GPU_HOST_FLAGS) -DISOTOPY_GPU_MAX_DELTA=$(GPU_MAX_DELTA) \
+	  $< -o $@ $(GPU_HOST_LINK)
+
+$(TEST_DIR)/isotopy_gpu_stage%: $(GPU_TEST_SRC) $(GPU_HEADERS) $(TARGET) | $(TEST_DIR)
+	$(CXX) -std=c++20 -Wall -Wextra -O1 -fPIC -DISOTOPY_GPU_STOP_AFTER=$* \
+	  $(GPU_HOST_FLAGS) $(GPU_DEFS) $< -o $@ $(GPU_HOST_LINK)
+
+$(GPU_TSAN_BIN): $(GPU_TEST_SRC) $(GPU_HEADERS) $(TARGET) | $(TEST_DIR)
+	$(CXX) -std=c++20 -Wall -Wextra -O1 -g -fsanitize=thread -fPIC -DISOTOPY_GPU_HOST_WARP \
+	  $(GPU_HOST_FLAGS) $(GPU_DEFS) $< -o $@ $(GPU_HOST_LINK)
+
+gpu_ptxas: $(GPU_DIR)/isotopy_gpu.cu $(GPU_HEADERS) | obj/
+	$(NVCC) $(NVCCFLAGS) -Xptxas -v -c $< -o obj/isotopy_gpu_device.o
+
+gpu_cuda: $(GPU_CUDA_BIN)
+
+$(GPU_CUDA_BIN): $(GPU_DIR)/isotopy_gpu.cu $(GPU_HEADERS) $(TARGET) | $(BIN_DIR)
+	$(NVCC) $(NVCCFLAGS) -DISOTOPY_GPU_MAIN $(GPU_DIR)/isotopy_gpu.cu -o $@ \
+	  -L. -Xlinker -rpath -Xlinker '$$ORIGIN/..' -lisotopy
+
 docs:
 	doxygen Doxyfile
 
 clean:
 	rm -f $(OBJ) $(TARGET) $(TEST_OBJ) $(TEST_BIN) $(TEST_BATCH_OBJ) \
 	$(TEST_FULL_BIN) $(BENCHMARK_OBJ) $(BENCHMARK_BIN) $(PROFILING_OBJ) \
-	$(PROFILING_BIN) obj/*.o wasm_obj/*.o libisotopy_wasm.a $(TEST_YAML)
+	$(PROFILING_BIN) $(GPU_TEST_BIN) $(GPU_TSAN_BIN) $(GPU_STAGE_BINS) \
+	$(BIN_DIR)/isotopy_gpu_cuda $(BIN_DIR)/isotopy_gpu_stage* obj/isotopy_gpu_device.o \
+	obj/*.o wasm_obj/*.o libisotopy_wasm.a $(TEST_YAML)
 	rm -rf $(BIN_DIR)
 
  
-debug_test: CXXFLAGS += -g -D_GLIBCXX_DEBUG -D_GLIBCXX_DEBUG_BACKTRACE
-debug_test: LDFLAGS = -g
+debug_test: CXXFLAGS += -g -UNDEBUG -D_GLIBCXX_DEBUG -D_GLIBCXX_DEBUG_BACKTRACE
+# _GLIBCXX_DEBUG_BACKTRACE needs libstdc++exp for __glibcxx_backtrace_full (GCC 14+).
+debug_test: LDFLAGS = -g -lstdc++exp
 debug_test: $(TEST_BIN)
 	./$(TEST_BIN)
 
 # Emscripten build
-.PHONY: emscripten docs
+.PHONY: emscripten docs gpu_test gpu_ptxas gpu_cuda
 
 emscripten: clean emscripten_build
 
-emscripten_build: 
-	$(MAKE) OBJ="wasm_obj/isotopy_graph.o wasm_obj/haas.o" TARGET=libisotopy_wasm.a CXX=em++ CXXFLAGS="$(CXXFLAGS)" libisotopy_wasm.a
+# ARCH= because -march=native is not a valid option for the wasm32 target.
+emscripten_build:
+	$(MAKE) OBJ="wasm_obj/isotopy_graph.o wasm_obj/haas.o" TARGET=libisotopy_wasm.a CXX=em++ ARCH= \
+		CXXFLAGS="$(filter-out $(ARCH),$(CXXFLAGS))" libisotopy_wasm.a
 
 libisotopy_wasm.a: $(OBJ)
 	ar rcs $@ $(OBJ)

@@ -873,3 +873,134 @@ TEST_CASE("reproducer: seed=3 delta=4 step=140 p_regions>max", "[regression][rep
         }
     }
 }
+
+// ──────────────────── Release-hardening regression tests ────────────────────
+
+namespace {
+
+// The delta=8 triangulation used by the first test case in this file, as a
+// vector<Triangle> so it can be fed to the non-legacy constructors.
+std::vector<Isotopy::Triangle> reference_triangulation_d8() {
+  return {
+    {1,0,9},{1,9,10},{2,1,10},{2,10,11},{3,2,11},{3,11,12},{4,3,12},{4,12,13},
+    {5,4,13},{5,13,14},{6,5,14},{6,14,15},{7,6,15},{7,15,16},{8,7,16},{10,9,17},
+    {10,17,18},{11,10,18},{11,18,19},{12,11,19},{12,19,20},{13,12,20},{13,20,21},
+    {14,13,21},{14,21,22},{15,14,22},{15,22,23},{16,15,23},{18,17,24},{18,24,25},
+    {19,18,25},{19,25,26},{20,19,26},{20,26,27},{21,20,27},{21,27,28},{22,21,28},
+    {22,28,29},{23,22,29},{25,24,30},{25,30,31},{26,25,31},{26,31,32},{27,26,32},
+    {27,32,33},{28,27,33},{28,33,34},{29,28,34},{31,30,35},{31,35,36},{32,31,36},
+    {32,36,37},{33,32,37},{33,37,38},{34,33,38},{36,35,39},{36,39,40},{37,36,40},
+    {37,40,41},{38,37,41},{40,39,42},{40,42,43},{41,40,43},{43,42,44}
+  };
+}
+
+}  // namespace
+
+TEST_CASE("Graph constructor - sign vector of wrong length", "[isotopy][validation]") {
+  int delta = 8;
+  auto triangles = reference_triangulation_d8();
+
+  SECTION("too short") {
+    std::vector<bool> sign(Isotopy::num_vertices(delta) - 1, true);
+    REQUIRE_THROWS_AS(Isotopy::Graph(delta, sign, triangles), std::invalid_argument);
+  }
+
+  SECTION("too long") {
+    std::vector<bool> sign(Isotopy::num_vertices(delta) + 1, true);
+    REQUIRE_THROWS_AS(Isotopy::Graph(delta, sign, triangles), std::invalid_argument);
+  }
+}
+
+TEST_CASE("Graph constructor - wrong triangle count", "[isotopy][validation]") {
+  int delta = 8;
+  std::vector<bool> sign(Isotopy::num_vertices(delta), true);
+  auto triangles = reference_triangulation_d8();
+  REQUIRE(triangles.size() == static_cast<size_t>(delta * delta));
+
+  triangles.pop_back();
+  REQUIRE_THROWS_AS(Isotopy::Graph(delta, sign, triangles), std::invalid_argument);
+}
+
+TEST_CASE("Graph constructor - triangle without three vertices", "[isotopy][validation]") {
+  int delta = 2;
+  std::vector<bool> sign(Isotopy::num_vertices(delta), true);
+  std::set<std::set<int>> triangles = {{0, 1}, {1, 2, 3}, {2, 3, 4}, {3, 4, 5}};
+
+  REQUIRE_THROWS_AS(Isotopy::Graph(delta, sign, triangles), std::invalid_argument);
+}
+
+TEST_CASE("region_adjacency invariants", "[isotopy][regions]") {
+  auto triangles = reference_triangulation_d8();
+  std::mt19937 rng(20260921);
+  std::bernoulli_distribution coin(0.5);
+
+  for (int delta : {7, 8}) {
+    auto tris = (delta == 8) ? triangles
+                             : edges_to_triangles(Utils::get_random_triangulation(delta), delta);
+
+    for (int trial = 0; trial < 50; ++trial) {
+      std::vector<bool> sign(Isotopy::num_vertices(delta));
+      for (size_t i = 0; i < sign.size(); ++i) sign[i] = coin(rng);
+
+      Isotopy::Graph g(delta, sign, tris);
+      g.isotopy_type();
+
+      INFO("delta=" << delta << " trial=" << trial);
+      REQUIRE(g.region_adjacency.size() == static_cast<size_t>(g.region_count));
+
+      for (int r = 0; r < static_cast<int>(g.region_adjacency.size()); ++r) {
+        for (int n : g.region_adjacency[r]) {
+          REQUIRE(n != r);
+          REQUIRE(n >= 0);
+          REQUIRE(n < g.region_count);
+          // Adjacency is symmetric.
+          const auto& back = g.region_adjacency[n];
+          REQUIRE(std::find(back.begin(), back.end(), r) != back.end());
+        }
+        REQUIRE(std::is_sorted(g.region_adjacency[r].begin(), g.region_adjacency[r].end()));
+      }
+    }
+  }
+}
+
+TEST_CASE("get_region_tree - shape and region mapping", "[isotopy][regions]") {
+  int delta = 8;
+  std::vector<bool> sign {1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1};
+  Isotopy::Graph g(delta, sign, reference_triangulation_d8());
+  g.isotopy_type();
+
+  auto tree = Isotopy::get_region_tree(g.region[g.root], g.region_adjacency);
+
+  REQUIRE_FALSE(tree.empty());
+  REQUIRE(tree[0].parent == -1);
+  REQUIRE(tree[0].region == g.region[g.root]);
+
+  std::set<int> seen;
+  for (size_t i = 0; i < tree.size(); ++i) {
+    INFO("node " << i);
+    REQUIRE(tree[i].region >= 0);
+    REQUIRE(tree[i].region < g.region_count);
+    REQUIRE(tree[i].leaf_count >= 0);
+    // Every node but the root points at a strictly earlier node (DFS preorder).
+    if (i > 0) {
+      REQUIRE(tree[i].parent >= 0);
+      REQUIRE(tree[i].parent < static_cast<int>(i));
+    }
+    // No region appears twice.
+    REQUIRE(seen.insert(tree[i].region).second);
+  }
+}
+
+TEST_CASE("isotopy_type - throws when no isotopy root exists", "[isotopy][validation]") {
+  // Two-phase construction with an empty edge list: every vertex is its own
+  // component, so the antipodal graph is bipartite and conflict-free and no root
+  // is ever assigned. Before the guard this read region[-1] and then wrote
+  // through the garbage index.
+  for (int delta : {4, 5}) {
+    INFO("delta=" << delta);
+    Isotopy::Graph g(delta);
+    g.initialize(std::vector<bool>(Isotopy::num_vertices(delta), true));
+    g.process_edges({});
+    REQUIRE_THROWS_AS(g.isotopy_type(), std::runtime_error);
+  }
+}
