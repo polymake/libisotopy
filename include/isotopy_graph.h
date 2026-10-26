@@ -139,9 +139,9 @@ struct Graph {
    * Use this followed by initialize() and process_triangles()/process_edges()
    * for fine-grained control or benchmarking individual phases.
    *
-   * @param delta The degree of the patchwork.
+   * @param degree The degree of the patchwork.
    */
-  explicit Graph(int delta) : delta(delta) {}
+  explicit Graph(int degree) : delta(degree) {}
 
   /**
    * @brief Initializes the graph structure from a sign vector.
@@ -177,38 +177,38 @@ struct Graph {
   /**
    * @brief Constructs a graph from a sign vector and a list of edges.
    *
-   * @param delta The degree of the patchwork.
+   * @param degree The degree of the patchwork.
    * @param sign_vector The sign vector with a boolean value for each vertex.
    * @param edges The list of edges, each represented as a pair of vertex indices.
    */
-  Graph(int delta, const vector<bool>& sign_vector, const vector<Edge>& edges);
+  Graph(int degree, const vector<bool>& sign_vector, const vector<Edge>& edges);
 
   /**
    * @brief Constructs a graph from a sign vector and a set of edges (backwards compatibility).
    *
-   * @param delta The degree of the patchwork.
+   * @param degree The degree of the patchwork.
    * @param sign_vector The sign vector with a boolean value for each vertex.
    * @param edges The set of edges, each represented as a pair of vertex indices.
    */
-  Graph(int delta, const vector<bool>& sign_vector, const std::set<std::pair<int, int>>& edges);
+  Graph(int degree, const vector<bool>& sign_vector, const std::set<std::pair<int, int>>& edges);
 
   /**
    * @brief Constructs a graph from a sign vector and a list of triangles.
    *
-   * @param delta defines the degree of the patchwork
+   * @param degree defines the degree of the patchwork
    * @param sign_vector The sign vector with a boolean value for each vertex.
    * @param triangles The list of triangles, each represented as three vertex indices.
    */
-  Graph(int delta, const vector<bool>& sign_vector, const vector<Triangle>& triangles);
+  Graph(int degree, const vector<bool>& sign_vector, const vector<Triangle>& triangles);
 
   /**
    * @brief Constructs a graph from a sign vector and a set of triangles (backwards compatibility).
    *
-   * @param delta defines the degree of the patchwork
+   * @param degree defines the degree of the patchwork
    * @param sign_vector The sign vector with a boolean value for each vertex.
    * @param triangles The set of triangles, each represented as a set of three vertex indices.
    */
-  Graph(int delta, const vector<bool>& sign_vector, const std::set<std::set<int>>& triangles);
+  Graph(int degree, const vector<bool>& sign_vector, const std::set<std::set<int>>& triangles);
 
   /**
    * @brief Computes the connected components of the graph.

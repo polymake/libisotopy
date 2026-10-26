@@ -188,8 +188,8 @@ void Graph::process_triangles(const vector<Triangle>& triangles) {
   }
 }
 
-Graph::Graph(int delta, const vector<bool>& sign_vector, const vector<Triangle>& triangles)
-  : delta(delta) {
+Graph::Graph(int degree, const vector<bool>& sign_vector, const vector<Triangle>& triangles)
+  : delta(degree) {
   initialize(sign_vector);
   process_triangles(triangles);
 }
@@ -212,19 +212,19 @@ void Graph::process_edges(const vector<Edge>& edges) {
 }
 
 // Edge-based constructor
-Graph::Graph(int delta, const vector<bool>& sign_vector, const vector<Edge>& edges)
-  : delta(delta) {
+Graph::Graph(int degree, const vector<bool>& sign_vector, const vector<Edge>& edges)
+  : delta(degree) {
   initialize(sign_vector);
   process_edges(edges);
 }
 
 // Backwards compatibility constructor: converts set<pair<int,int>> to vector<Edge>
-Graph::Graph(int delta, const vector<bool>& sign_vector, const set<pair<int, int>>& edges)
-: Graph(delta, sign_vector, vector<Edge>(edges.begin(), edges.end())) {}
+Graph::Graph(int degree, const vector<bool>& sign_vector, const set<pair<int, int>>& edges)
+: Graph(degree, sign_vector, vector<Edge>(edges.begin(), edges.end())) {}
 
 // Backwards compatibility constructor: converts set<set<int>> to vector<Triangle>
-Graph::Graph(int delta, const vector<bool>& sign_vector, const set<set<int>>& triangles)
-: Graph(delta, sign_vector, [&triangles]() {
+Graph::Graph(int degree, const vector<bool>& sign_vector, const set<set<int>>& triangles)
+: Graph(degree, sign_vector, [&triangles]() {
     vector<Triangle> tri_vec;
     tri_vec.reserve(triangles.size());
     for (const auto& tri_set : triangles) {
@@ -249,13 +249,13 @@ void Graph::connected_components() {
   ncomponents = 0;
 
   for (int i = 0; i < ntotalverts; ++i) {
-    int root = find(parent, i);
+    int representative = find(parent, i);
 
-    if (component[root] == -1) {
-      component[root] = ncomponents++;
+    if (component[representative] == -1) {
+      component[representative] = ncomponents++;
     }
 
-    component[i] = component[root];
+    component[i] = component[representative];
   }
   components_computed = true;
 }
@@ -909,7 +909,7 @@ int point_to_idx(int delta, int x, int y) {
     const auto& coords = get_coord_table(delta);
     auto& reverse_map = reverse_cache[delta];
     for (size_t i = 0; i < coords.size(); ++i) {
-      reverse_map[coords[i]] = i;
+      reverse_map[coords[i]] = static_cast<int>(i);
     }
     delta_it = reverse_cache.find(delta);
   }
@@ -934,9 +934,9 @@ int original_idx(int delta, int idx) {
 }
 
 void Graph::apply_flip(const Edge& old_edge, const Edge& new_edge) {
-  auto replace_or_move_edge = [](vector<pair<int,int>>& from, vector<pair<int,int>>& to, Edge old_edge, Edge new_edge, bool replace_only) {
+  auto replace_or_move_edge = [](vector<pair<int,int>>& from, vector<pair<int,int>>& to, Edge removed, Edge added, bool replace_only) {
     auto is_old_edge = [&](const pair<int,int>& e) {
-      return (e == old_edge) || (e.first == old_edge.second && e.second == old_edge.first);
+      return (e == removed) || (e.first == removed.second && e.second == removed.first);
     };
 
     bool found = false;
@@ -944,15 +944,15 @@ void Graph::apply_flip(const Edge& old_edge, const Edge& new_edge) {
       if (is_old_edge(e)) {
         found = true;
         if (replace_only) {
-          e = new_edge;
+          e = added;
         }
       }
     }
     if (!replace_only) {
       from.erase(std::remove_if(from.begin(), from.end(), is_old_edge), from.end());
-      to.push_back(new_edge);
+      to.push_back(added);
     } else if (!found) {
-      from.push_back(new_edge);
+      from.push_back(added);
     }
   };
 
@@ -1302,7 +1302,7 @@ vector<std::string> trees_of_size(int n){
       for(const auto& p: partitions_of_max_length_k(n-i-1, i)){
          auto it = p.rbegin();
          vector<std::string> inner_res{"o["};
-         bool first = true;
+         first = true;
          while(it != p.rend()){
             auto sts = trees_of_size(*it+1);
             vector<std::string> newres{};
@@ -1319,13 +1319,14 @@ vector<std::string> trees_of_size(int n){
          std::string tail = "";
          vector<std::string> newres;
          first = true;
-         for(int j=0; j<i-p.size(); j++){
+         const int parts = static_cast<int>(p.size());
+         for(int j=0; j<i-parts; j++){
             tail += (first ? "o" : ",o");
             first = false;
          }
          tail = tail + "]";
          for(const auto& r : inner_res){
-            std::string concat = r + (i>p.size() ? "," : "")+ tail;
+            std::string concat = r + (i>parts ? "," : "")+ tail;
             newres.push_back(concat);
          }
          std::swap(newres, inner_res);
@@ -1375,7 +1376,7 @@ void remove_intersecting_edges(vector<pair<int, int>>& edges, const pair<int, in
 
 pair<int, int> get_and_remove_random_edge(vector<pair<int, int>>& edges){
   pair<int, int> result;
-  int pos = std::rand() % edges.size();
+  int pos = static_cast<int>(std::rand() % edges.size());
   auto iter = edges.begin();
   for(int i=0; i<pos; i++){
     iter++;

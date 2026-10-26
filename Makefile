@@ -181,7 +181,12 @@ debug_test: $(TEST_BIN)
 	./$(TEST_BIN)
 
 # Emscripten build
-.PHONY: emscripten docs gpu_test gpu_ptxas gpu_cuda
+POLYMAKE_WFLAGS = -Wall -Wextra -Wshadow -Wconversion -Wsign-compare -Werror
+polymake_ready_test:
+	$(CXX) -std=c++20 -DMAX_DELTA=$(MAX_DELTA) $(POLYMAKE_WFLAGS) -fsyntax-only -Iinclude src/isotopy_graph.cpp
+	$(CXX) -std=c++20 -DMAX_DELTA=$(MAX_DELTA) $(POLYMAKE_WFLAGS) -fsyntax-only -Iinclude src/haas.cpp
+
+.PHONY: emscripten docs gpu_test gpu_ptxas gpu_cuda polymake_ready_test
 
 emscripten: clean emscripten_build
 

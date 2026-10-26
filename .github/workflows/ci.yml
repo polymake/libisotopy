@@ -29,6 +29,7 @@ jobs:
       - run: make clean
       - run: make
       - run: make test_full
+      - run: make polymake_ready_test
 
   # Every GPU host test on the CPU lane shim, diffed against libisotopy: the
   # plain binary, stages 1-5 truncated at their boundary, and the 32-lane
